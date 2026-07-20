@@ -40,5 +40,7 @@ async def unhandled_error_handler(_: Request, exc: Exception) -> JSONResponse:
     logger.exception("unhandled_error", error_type=type(exc).__name__)
     return JSONResponse(
         status_code=500,
-        content=ErrorResponse(code="internal_error", message="An unexpected error occurred.").model_dump(),
+        content=ErrorResponse(
+            code="internal_error", message="An unexpected error occurred."
+        ).model_dump(),
     )

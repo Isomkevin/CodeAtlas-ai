@@ -55,12 +55,18 @@ def configure_tracing(app: FastAPI, settings: Settings) -> None:
 class HttpMetricsMiddleware(BaseHTTPMiddleware):
     """Record stable route-level latency and request-count metrics."""
 
-    async def dispatch(self, request: Request, call_next: Callable[[Request], Response]) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Response]
+    ) -> Response:
         started_at = time.perf_counter()
         response = await call_next(request)
         route = request.scope.get("route")
         route_path = getattr(route, "path", request.url.path)
-        labels = {"method": request.method, "route": route_path, "status_code": response.status_code}
+        labels = {
+            "method": request.method,
+            "route": route_path,
+            "status_code": response.status_code,
+        }
         HTTP_REQUESTS_TOTAL.labels(**labels).inc()
         HTTP_REQUEST_DURATION_SECONDS.labels(**labels).observe(time.perf_counter() - started_at)
         return response

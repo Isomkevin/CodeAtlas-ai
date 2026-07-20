@@ -1,6 +1,6 @@
 """Liveness and readiness endpoints for orchestrators and deployments."""
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from app.config import Settings, get_settings
@@ -29,4 +29,6 @@ async def ready(settings: Settings = Depends(get_settings)) -> HealthResponse:
     reflects only dependencies the deployed feature set actually requires.
     """
 
-    return HealthResponse(status="ready", service=settings.app_name, environment=settings.environment)
+    return HealthResponse(
+        status="ready", service=settings.app_name, environment=settings.environment
+    )

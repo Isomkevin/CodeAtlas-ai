@@ -10,8 +10,14 @@ from fastapi.responses import JSONResponse
 
 from app.api.v1.health import router as health_router
 from app.config import Settings, get_settings
+from app.modules.authentication.controller import router as authentication_router
 from app.observability import configure_observability
-from app.shared.errors import DomainError, ErrorResponse, domain_error_handler, unhandled_error_handler
+from app.shared.errors import (
+    DomainError,
+    ErrorResponse,
+    domain_error_handler,
+    unhandled_error_handler,
+)
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -34,6 +40,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         docs_url=f"{resolved_settings.api_v1_prefix}/docs",
         redoc_url=None,
     )
+    app.dependency_overrides[get_settings] = lambda: resolved_settings
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[str(origin) for origin in resolved_settings.allowed_origins],
@@ -49,11 +56,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return JSONResponse(
             status_code=422,
             content=ErrorResponse(
-                code="validation_error", message="Request validation failed.", details={"errors": exc.errors()}
+                code="validation_error",
+                message="Request validation failed.",
+                details={"errors": exc.errors()},
             ).model_dump(),
         )
 
     app.include_router(health_router, prefix=resolved_settings.api_v1_prefix)
+    app.include_router(authentication_router, prefix=resolved_settings.api_v1_prefix)
     configure_observability(app, resolved_settings)
     return app
 

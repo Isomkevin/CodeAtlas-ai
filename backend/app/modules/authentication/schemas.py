@@ -1,0 +1,31 @@
+"""Authentication API contracts; ORM entities never leave the module."""
+
+from uuid import UUID
+
+from pydantic import BaseModel, EmailStr, Field, HttpUrl
+
+from app.modules.authentication.models import MembershipRole
+
+
+class CurrentUser(BaseModel):
+    id: UUID
+    email: EmailStr
+    display_name: str
+    organization_id: UUID
+    organization_slug: str
+    role: MembershipRole
+
+
+class AccessToken(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int
+
+
+class GitHubAuthorization(BaseModel):
+    authorization_url: HttpUrl
+
+
+class CreateOrganizationRequest(BaseModel):
+    name: str = Field(min_length=2, max_length=160)
+    slug: str = Field(pattern="^[a-z0-9]+(?:-[a-z0-9]+)*$", min_length=2, max_length=80)

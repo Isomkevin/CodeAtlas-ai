@@ -8,12 +8,18 @@ version = "0.1.0"
 description = "CodeAtlas Architecture Intelligence Platform API"
 requires-python = ">=3.12"
 dependencies = [
+  "alembic>=1.14,<2.0",
+  "email-validator>=2.2,<3.0",
   "fastapi>=0.115,<1.0",
+  "httpx>=0.28,<1.0",
   "opentelemetry-api>=1.29,<2.0",
   "opentelemetry-instrumentation-fastapi>=0.50b0,<1.0",
   "opentelemetry-sdk>=1.29,<2.0",
   "prometheus-client>=0.21,<1.0",
   "pydantic-settings>=2.7,<3.0",
+  "PyJWT[crypto]>=2.10,<3.0",
+  "SQLAlchemy>=2.0,<3.0",
+  "psycopg[binary]>=3.2,<4.0",
   "structlog>=24.4,<26.0",
   "uvicorn[standard]>=0.32,<1.0",
 ]
@@ -40,6 +46,7 @@ src = ["backend"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+ignore = ["B008"]
 
 [tool.coverage.run]
 branch = true
