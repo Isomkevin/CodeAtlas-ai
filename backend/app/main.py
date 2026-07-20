@@ -1,0 +1,61 @@
+"""FastAPI application factory for CodeAtlas."""
+
+from contextlib import asynccontextmanager
+
+import structlog
+from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+
+from app.api.v1.health import router as health_router
+from app.config import Settings, get_settings
+from app.observability import configure_observability
+from app.shared.errors import DomainError, ErrorResponse, domain_error_handler, unhandled_error_handler
+
+
+def create_app(settings: Settings | None = None) -> FastAPI:
+    """Create the API application with only cross-cutting infrastructure wired in."""
+
+    resolved_settings = settings or get_settings()
+
+    @asynccontextmanager
+    async def lifespan(_: FastAPI):
+        logger = structlog.get_logger(__name__)
+        logger.info("application_started", environment=resolved_settings.environment)
+        yield
+        logger.info("application_stopped")
+
+    app = FastAPI(
+        title=resolved_settings.app_name,
+        version="0.1.0",
+        lifespan=lifespan,
+        openapi_url=f"{resolved_settings.api_v1_prefix}/openapi.json",
+        docs_url=f"{resolved_settings.api_v1_prefix}/docs",
+        redoc_url=None,
+    )
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[str(origin) for origin in resolved_settings.allowed_origins],
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+        allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
+    )
+    app.add_exception_handler(DomainError, domain_error_handler)
+    app.add_exception_handler(Exception, unhandled_error_handler)
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_error_handler(_, exc: RequestValidationError) -> JSONResponse:
+        return JSONResponse(
+            status_code=422,
+            content=ErrorResponse(
+                code="validation_error", message="Request validation failed.", details={"errors": exc.errors()}
+            ).model_dump(),
+        )
+
+    app.include_router(health_router, prefix=resolved_settings.api_v1_prefix)
+    configure_observability(app, resolved_settings)
+    return app
+
+
+app = create_app()
