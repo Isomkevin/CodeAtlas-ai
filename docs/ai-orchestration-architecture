@@ -1,0 +1,751 @@
+# AI Orchestration Architecture
+
+Version: 1.0
+
+Status: Canonical
+
+Owner: LESOM Dynamics
+
+Project: CodeAtlas
+
+---
+
+# Overview
+
+The AI Orchestration Layer is responsible for coordinating all AI reasoning within CodeAtlas.
+
+Rather than relying on a single general-purpose assistant, CodeAtlas is composed of specialized agents that collaborate to understand, reason about, validate, document, and evolve software systems.
+
+Each agent has a narrowly defined responsibility.
+
+No agent performs tasks outside its domain.
+
+The AI Orchestrator plans work, delegates execution, aggregates outputs, resolves conflicts, and presents unified results to users.
+
+---
+
+# Design Principles
+
+Specialization over Generalization
+
+Every agent should solve one problem exceptionally well.
+
+Deterministic Context
+
+Agents receive structured architectural context instead of raw repositories whenever possible.
+
+Tool First
+
+Agents should use tools before relying on language reasoning.
+
+Explainability
+
+Every recommendation must include reasoning.
+
+Approval
+
+No agent may modify repositories without explicit approval.
+
+Composable Workflows
+
+Agents may invoke other agents.
+
+Stateless Execution
+
+Agents remain stateless.
+
+Persistent knowledge belongs to the Knowledge Graph.
+
+---
+
+# AI Orchestrator
+
+Purpose
+
+Coordinate every AI workflow.
+
+Responsibilities
+
+Task decomposition.
+
+Planning.
+
+Context construction.
+
+Tool selection.
+
+Agent routing.
+
+Memory retrieval.
+
+Streaming responses.
+
+Conflict resolution.
+
+Retry handling.
+
+Output aggregation.
+
+Workflow execution.
+
+Audit logging.
+
+The orchestrator never performs domain work itself.
+
+---
+
+# Context Builder
+
+Purpose
+
+Construct minimal but complete context.
+
+Inputs
+
+Repository
+
+Architecture Graph
+
+User Intent
+
+Repository Metadata
+
+Current Branch
+
+Commit SHA
+
+Historical Decisions
+
+Outputs
+
+Structured Context Package
+
+Responsibilities
+
+Reduce token usage.
+
+Prioritize architectural information.
+
+Remove irrelevant files.
+
+Attach architecture summaries.
+
+Attach dependency graph.
+
+Attach ADRs.
+
+Attach implementation history.
+
+---
+
+# Memory Manager
+
+Purpose
+
+Provide long-term memory.
+
+Stores
+
+Architecture snapshots.
+
+Past conversations.
+
+Generated documentation.
+
+Pull requests.
+
+Architecture decisions.
+
+Agent outputs.
+
+Reasoning history.
+
+Implementation history.
+
+Future versions may integrate vector retrieval and episodic memory.
+
+---
+
+# Planner Agent
+
+Mission
+
+Create execution plans.
+
+Responsibilities
+
+Break complex requests into tasks.
+
+Estimate effort.
+
+Determine dependencies.
+
+Assign agents.
+
+Produce execution graphs.
+
+Inputs
+
+User request.
+
+Architecture graph.
+
+Outputs
+
+Execution plan.
+
+Never
+
+Write code.
+
+---
+
+# Architecture Agent
+
+Mission
+
+Understand software systems.
+
+Responsibilities
+
+Infer architecture.
+
+Identify services.
+
+Detect dependencies.
+
+Infer layers.
+
+Infer domains.
+
+Identify ownership.
+
+Identify coupling.
+
+Detect anti-patterns.
+
+Outputs
+
+Architecture Graph.
+
+Architecture Summary.
+
+Architecture Health.
+
+Architecture Drift.
+
+---
+
+# Repository Agent
+
+Mission
+
+Understand repositories.
+
+Responsibilities
+
+Clone repositories.
+
+Analyze Git history.
+
+Detect languages.
+
+Parse manifests.
+
+Read configuration.
+
+Detect frameworks.
+
+Outputs
+
+Repository Model.
+
+---
+
+# Documentation Agent
+
+Mission
+
+Generate documentation.
+
+Responsibilities
+
+Generate README.
+
+Generate onboarding.
+
+Generate ADRs.
+
+Generate runbooks.
+
+Generate architecture documentation.
+
+Generate API documentation.
+
+Update existing documentation.
+
+Never
+
+Invent APIs.
+
+Invent architecture.
+
+Modify source code.
+
+---
+
+# Diagram Agent
+
+Mission
+
+Generate visual representations.
+
+Outputs
+
+Draw.io.
+
+Mermaid.
+
+PlantUML.
+
+C4.
+
+ERD.
+
+Deployment diagrams.
+
+Sequence diagrams.
+
+Infrastructure diagrams.
+
+Data flow diagrams.
+
+Always
+
+Generate from Architecture Graph.
+
+Never
+
+Generate directly from prompts.
+
+---
+
+# Review Agent
+
+Mission
+
+Review architectural quality.
+
+Responsibilities
+
+Detect violations.
+
+Suggest improvements.
+
+Review pull requests.
+
+Validate layering.
+
+Validate dependencies.
+
+Generate review reports.
+
+Architecture score.
+
+Maintainability score.
+
+Risk score.
+
+---
+
+# Drift Agent
+
+Mission
+
+Detect divergence.
+
+Compare
+
+Architecture Graph
+
+Repository
+
+Deployment
+
+Outputs
+
+Drift Report.
+
+Risk Analysis.
+
+Suggested Fixes.
+
+---
+
+# Implementation Agent
+
+Mission
+
+Convert architecture into implementation.
+
+Responsibilities
+
+Generate code.
+
+Generate tests.
+
+Generate migrations.
+
+Generate APIs.
+
+Generate services.
+
+Generate infrastructure.
+
+Generate pull requests.
+
+Never
+
+Bypass architecture constraints.
+
+---
+
+# Refactoring Agent
+
+Mission
+
+Safely evolve systems.
+
+Responsibilities
+
+Split services.
+
+Merge services.
+
+Rename modules.
+
+Extract interfaces.
+
+Reduce coupling.
+
+Generate migration plans.
+
+Generate compatibility layers.
+
+---
+
+# Testing Agent
+
+Mission
+
+Guarantee implementation quality.
+
+Responsibilities
+
+Generate unit tests.
+
+Generate integration tests.
+
+Generate contract tests.
+
+Generate E2E tests.
+
+Coverage analysis.
+
+Mutation testing.
+
+Regression detection.
+
+---
+
+# Security Agent
+
+Mission
+
+Protect repositories.
+
+Responsibilities
+
+Secret scanning.
+
+Dependency scanning.
+
+Permission review.
+
+Threat modeling.
+
+Architecture security review.
+
+OWASP validation.
+
+---
+
+# Infrastructure Agent
+
+Mission
+
+Understand deployments.
+
+Responsibilities
+
+Generate Docker.
+
+Generate Terraform.
+
+Generate Kubernetes.
+
+Generate Helm.
+
+Analyze cloud infrastructure.
+
+Detect infrastructure drift.
+
+---
+
+# Performance Agent
+
+Mission
+
+Optimize systems.
+
+Responsibilities
+
+Identify bottlenecks.
+
+Suggest caching.
+
+Suggest partitioning.
+
+Suggest async processing.
+
+Analyze database performance.
+
+---
+
+# Knowledge Graph Agent
+
+Mission
+
+Maintain architectural truth.
+
+Responsibilities
+
+Create nodes.
+
+Merge nodes.
+
+Resolve duplicates.
+
+Maintain relationships.
+
+Version graph.
+
+Generate graph diffs.
+
+---
+
+# Collaboration Agent
+
+Mission
+
+Coordinate multiple AI agents.
+
+Responsibilities
+
+Conflict detection.
+
+Merge outputs.
+
+Detect contradictory recommendations.
+
+Consensus generation.
+
+Workflow synchronization.
+
+---
+
+# Agent Communication
+
+Agents never communicate directly.
+
+All communication passes through the AI Orchestrator.
+
+Benefits
+
+Centralized logging.
+
+Deterministic workflows.
+
+Security enforcement.
+
+Context management.
+
+Retry handling.
+
+---
+
+# Workflow Example
+
+User
+
+↓
+
+"Split Payments into Billing and Settlement"
+
+↓
+
+Planner Agent
+
+↓
+
+Architecture Agent
+
+↓
+
+Review Agent
+
+↓
+
+Implementation Agent
+
+↓
+
+Testing Agent
+
+↓
+
+Documentation Agent
+
+↓
+
+Diagram Agent
+
+↓
+
+Knowledge Graph Agent
+
+↓
+
+Final Response
+
+---
+
+# Agent Permissions
+
+Each agent receives the minimum permissions required.
+
+Example
+
+Documentation Agent
+
+Read Architecture
+
+Read Repository
+
+Write Documentation
+
+Cannot
+
+Write Source Code
+
+Delete Files
+
+Push Git Commits
+
+---
+
+# Shared Tool Registry
+
+Every agent can request tools through the Tool Registry.
+
+Examples
+
+Repository Scanner
+
+AST Parser
+
+Graph Query Engine
+
+Documentation Generator
+
+Diagram Generator
+
+GitHub
+
+Neo4j
+
+OpenAI Responses API
+
+MCP Server
+
+Vector Search
+
+Semantic Search
+
+Filesystem
+
+Git
+
+---
+
+# Failure Handling
+
+If an agent fails
+
+Retry.
+
+Fallback.
+
+Escalate.
+
+Notify user.
+
+Never continue with corrupted context.
+
+---
+
+# Success Metrics
+
+Architecture accuracy
+
+Task completion
+
+Tool utilization
+
+Latency
+
+User approval rate
+
+Pull request acceptance rate
+
+Architecture drift reduction
+
+Developer productivity improvements
+
+Documentation freshness
+
+Implementation correctness
+
+---
+
+# Future Agents
+
+Observability Agent
+
+Compliance Agent
+
+Cost Optimization Agent
+
+Cloud Migration Agent
+
+Incident Response Agent
+
+Data Governance Agent
+
+Accessibility Agent
+
+Legal Compliance Agent
+
+Enterprise Governance Agent
+
+Organization Intelligence Agent
