@@ -4,6 +4,7 @@ import secrets
 from datetime import UTC, datetime, timedelta
 from urllib.parse import urlencode
 
+import httpx
 import jwt
 from fastapi import HTTPException, status
 
@@ -41,6 +42,52 @@ class AuthenticationService:
         if claims.get("purpose") != "github_oauth":
             raise HTTPException(status_code=401, detail="Invalid OAuth state")
 
+    async def sign_in_with_github(self, code: str, state: str) -> AccessToken:
+        """Exchange a verified GitHub identity for a tenant-scoped CodeAtlas session."""
+
+        if self._repository is None:
+            raise RuntimeError("GitHub sign-in requires a persistence repository")
+        self.validate_oauth_state(state)
+        profile = await self._fetch_github_profile(code)
+        email = profile["email"].lower()
+        user = await self._repository.find_user_by_email(email)
+        if user is None:
+            user = await self._repository.create_user(
+                email=email,
+                username=profile["login"],
+                display_name=profile["name"] or profile["login"],
+                avatar_url=profile["avatar_url"],
+            )
+            organization = await self._repository.create_organization(
+                name=f"{user.display_name} workspace",
+                slug=f"{user.username}-workspace",
+                owner=user,
+            )
+            role = MembershipRole.OWNER
+            await self._repository.add_audit(
+                action="organization.created",
+                resource_type="organization",
+                organization_id=organization.id,
+                actor_id=user.id,
+            )
+        else:
+            membership_and_organization = await self._repository.find_first_membership(user.id)
+            if membership_and_organization is None:
+                raise HTTPException(
+                    status_code=403, detail="User has no active organization membership"
+                )
+            membership, organization = membership_and_organization
+            role = membership.role
+        await self._repository.touch_login(user)
+        await self._repository.add_audit(
+            action="session.created",
+            resource_type="session",
+            organization_id=organization.id,
+            actor_id=user.id,
+        )
+        await self._repository.commit()
+        return self.mint_access_token(user, organization, role)
+
     def mint_access_token(
         self, user: User, organization: Organization, role: MembershipRole
     ) -> AccessToken:
@@ -68,6 +115,63 @@ class AuthenticationService:
         if not {"sub", "org", "role"}.issubset(claims):
             raise HTTPException(status_code=401, detail="Invalid access token")
         return claims
+
+    async def _fetch_github_profile(self, code: str) -> dict[str, str]:
+        if not all(
+            [
+                self._settings.github_client_id,
+                self._settings.github_client_secret,
+                self._settings.github_oauth_redirect_uri,
+            ]
+        ):
+            raise HTTPException(status_code=503, detail="GitHub OAuth is not configured")
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            token_response = await client.post(
+                "https://github.com/login/oauth/access_token",
+                headers={"Accept": "application/json"},
+                data={
+                    "client_id": self._settings.github_client_id,
+                    "client_secret": self._settings.github_client_secret.get_secret_value(),
+                    "code": code,
+                    "redirect_uri": str(self._settings.github_oauth_redirect_uri),
+                },
+            )
+            if token_response.is_error:
+                raise HTTPException(
+                    status_code=401, detail="GitHub authorization code was rejected"
+                )
+            access_token = token_response.json().get("access_token")
+            if not access_token:
+                raise HTTPException(status_code=401, detail="GitHub did not return an access token")
+            headers = {
+                "Accept": "application/vnd.github+json",
+                "Authorization": f"Bearer {access_token}",
+            }
+            profile_response = await client.get("https://api.github.com/user", headers=headers)
+            emails_response = await client.get(
+                "https://api.github.com/user/emails", headers=headers
+            )
+        if profile_response.is_error or emails_response.is_error:
+            raise HTTPException(status_code=502, detail="GitHub profile lookup failed")
+        email = next(
+            (
+                item["email"]
+                for item in emails_response.json()
+                if item.get("primary") and item.get("verified") and item.get("email")
+            ),
+            None,
+        )
+        profile = profile_response.json()
+        if not email or not profile.get("login"):
+            raise HTTPException(
+                status_code=422, detail="A verified primary GitHub email is required"
+            )
+        return {
+            "email": email,
+            "login": profile["login"],
+            "name": profile.get("name") or "",
+            "avatar_url": profile.get("avatar_url") or "",
+        }
 
     def _encode(self, claims: dict[str, str], lifetime: timedelta) -> str:
         now = datetime.now(UTC)

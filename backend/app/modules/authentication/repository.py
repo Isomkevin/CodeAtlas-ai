@@ -31,6 +31,19 @@ class AuthenticationRepository:
             )
         )
 
+    async def find_first_membership(self, user_id: UUID) -> tuple[Membership, Organization] | None:
+        row = await self._session.execute(
+            select(Membership, Organization)
+            .join(Organization, Organization.id == Membership.organization_id)
+            .where(Membership.user_id == user_id, Organization.deleted_at.is_(None))
+            .order_by(Membership.created_at)
+            .limit(1)
+        )
+        return row.first()
+
+    async def commit(self) -> None:
+        await self._session.commit()
+
     async def create_user(
         self, email: str, username: str, display_name: str, avatar_url: str | None
     ) -> User:

@@ -1,3 +1,5 @@
+import asyncio
+from datetime import timedelta
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -35,3 +37,57 @@ def test_github_oauth_requires_configuration() -> None:
         service().create_github_authorization_url()
 
     assert error.value.status_code == 503
+
+
+def test_github_sign_in_provisions_owner_workspace() -> None:
+    user = SimpleNamespace(
+        id=uuid4(),
+        email="engineer@example.com",
+        username="engineer",
+        display_name="Engineer",
+    )
+    organization = SimpleNamespace(id=uuid4(), slug="engineer-workspace")
+
+    class Repository:
+        audit_actions: list[str] = []
+        committed = False
+
+        async def find_user_by_email(self, email: str):
+            assert email == "engineer@example.com"
+            return None
+
+        async def create_user(self, **_):
+            return user
+
+        async def create_organization(self, **_):
+            return organization
+
+        async def add_audit(self, action: str, **_):
+            self.audit_actions.append(action)
+
+        async def touch_login(self, _):
+            return None
+
+        async def commit(self):
+            self.committed = True
+
+    repository = Repository()
+    auth_service = AuthenticationService(
+        repository, Settings(environment="test", allowed_origins=[])
+    )
+
+    async def profile(_: str) -> dict[str, str]:
+        return {
+            "email": "engineer@example.com",
+            "login": "engineer",
+            "name": "Engineer",
+            "avatar_url": "https://example.com/avatar.png",
+        }
+
+    auth_service._fetch_github_profile = profile  # type: ignore[method-assign]
+    state = auth_service._encode({"purpose": "github_oauth", "nonce": "test"}, timedelta(minutes=1))
+    access_token = asyncio.run(auth_service.sign_in_with_github("code", state))
+
+    assert auth_service.decode_access_token(access_token.access_token)["role"] == "owner"
+    assert repository.audit_actions == ["organization.created", "session.created"]
+    assert repository.committed is True

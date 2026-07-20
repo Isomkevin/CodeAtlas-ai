@@ -26,6 +26,11 @@ class GitHubAuthorization(BaseModel):
     authorization_url: HttpUrl
 
 
+class GitHubCallbackQuery(BaseModel):
+    code: str = Field(min_length=1, max_length=2048)
+    state: str = Field(min_length=1, max_length=4096)
+
+
 class CreateOrganizationRequest(BaseModel):
     name: str = Field(min_length=2, max_length=160)
     slug: str = Field(pattern="^[a-z0-9]+(?:-[a-z0-9]+)*$", min_length=2, max_length=80)
