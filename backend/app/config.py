@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     app_name: str = "CodeAtlas API"
     api_v1_prefix: str = "/api/v1"
     allowed_origins: list[AnyHttpUrl] = []
+    web_app_origin: AnyHttpUrl = "http://localhost:5173"
     database_url: str | None = None
     neo4j_uri: str | None = None
     redis_url: str | None = None

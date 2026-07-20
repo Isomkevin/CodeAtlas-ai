@@ -1,13 +1,16 @@
 """Authentication HTTP controllers; all business logic stays in the service."""
 
+import json
+
 from fastapi import APIRouter, Depends
+from fastapi.responses import HTMLResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings, get_settings
 from app.database import get_session
 from app.modules.authentication.repository import AuthenticationRepository
-from app.modules.authentication.schemas import AccessToken, GitHubAuthorization, GitHubCallbackQuery
+from app.modules.authentication.schemas import GitHubAuthorization, GitHubCallbackQuery
 from app.modules.authentication.service import AuthenticationService
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
@@ -35,12 +38,28 @@ async def github_authorize(
     return GitHubAuthorization(authorization_url=service.create_github_authorization_url())
 
 
-@router.get("/github/callback", response_model=AccessToken, summary="Complete GitHub OAuth")
+@router.get(
+    "/github/callback",
+    response_class=HTMLResponse,
+    summary="Complete GitHub OAuth",
+)
 async def github_callback(
     query: GitHubCallbackQuery = Depends(),
     service: AuthenticationService = Depends(get_persistent_authentication_service),
-) -> AccessToken:
-    return await service.sign_in_with_github(query.code, query.state)
+) -> HTMLResponse:
+    """Return a JWT to the trusted browser opener without exposing it in a URL."""
+
+    access_token = await service.sign_in_with_github(query.code, query.state)
+    origin = str(service._settings.web_app_origin).rstrip("/")
+    payload = json.dumps({"type": "codeatlas:session", "accessToken": access_token.access_token})
+    document = (
+        "<!doctype html><title>CodeAtlas sign-in complete</title>"
+        "<script>"
+        f"window.opener?.postMessage({payload}, {json.dumps(origin)});"
+        "window.close();"
+        "</script><p>Sign-in complete. You can close this window.</p>"
+    )
+    return HTMLResponse(document, headers={"Cache-Control": "no-store"})
 
 
 @router.get("/session/claims", summary="Validate the current bearer token")

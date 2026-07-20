@@ -3,7 +3,9 @@ import { PageHeader } from "@/components/app-shell";
 import { Card, SectionTitle } from "@/components/atlas-ui";
 import { Switch } from "@/components/ui/switch";
 import { GitBranch, Slack, KeyRound, Users, Bell, CreditCard } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
+const apiBaseUrl = import.meta.env.VITE_CODEATLAS_API_URL ?? "http://localhost:8000";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({ meta: [{ title: "Settings · CodeAtlas" }] }),
@@ -20,6 +22,41 @@ const sections = [
 
 function SettingsPage() {
   const [active, setActive] = useState("integrations");
+  const [githubConnected, setGithubConnected] = useState(false);
+  const [githubError, setGithubError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setGithubConnected(Boolean(sessionStorage.getItem("codeatlas.accessToken")));
+    const receiveSession = (event: MessageEvent<unknown>) => {
+      if (event.origin !== new URL(apiBaseUrl).origin || typeof event.data !== "object" || event.data === null) return;
+      const message = event.data as { type?: string; accessToken?: string };
+      if (message.type === "codeatlas:session" && message.accessToken) {
+        sessionStorage.setItem("codeatlas.accessToken", message.accessToken);
+        setGithubConnected(true);
+        setGithubError(null);
+      }
+    };
+    window.addEventListener("message", receiveSession);
+    return () => window.removeEventListener("message", receiveSession);
+  }, []);
+
+  const connectGitHub = async (enabled: boolean) => {
+    if (!enabled) {
+      sessionStorage.removeItem("codeatlas.accessToken");
+      setGithubConnected(false);
+      return;
+    }
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/v1/auth/github/authorize`);
+      if (!response.ok) throw new Error("GitHub OAuth is not configured yet.");
+      const { authorization_url } = await response.json() as { authorization_url: string };
+      const popup = window.open(authorization_url, "codeatlas-github-oauth", "popup,width=560,height=720");
+      if (!popup) throw new Error("Allow pop-ups to connect GitHub.");
+    } catch (error) {
+      setGithubError(error instanceof Error ? error.message : "Unable to connect GitHub.");
+      setGithubConnected(false);
+    }
+  };
 
   return (
     <div>
@@ -70,10 +107,14 @@ function SettingsPage() {
                     <div className="text-sm font-medium">{i.name}</div>
                     <div className="text-[11px] text-muted-foreground">{i.desc}</div>
                   </div>
-                  <Switch defaultChecked={i.on} />
+                  <Switch
+                    checked={i.name === "GitHub" ? githubConnected : i.on}
+                    onCheckedChange={i.name === "GitHub" ? connectGitHub : undefined}
+                  />
                 </div>
               ))}
             </div>
+            {githubError && <p className="mt-3 text-xs text-danger">{githubError}</p>}
           </Card>
 
           <Card className="p-5">
