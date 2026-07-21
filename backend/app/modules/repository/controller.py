@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Depends
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings, get_settings
@@ -12,7 +12,7 @@ from app.modules.authentication.models import MembershipRole
 from app.modules.repository.repository import RepositoryStore
 from app.modules.repository.schemas import CreateRepositoryRequest, RepositoryResponse, ScanResponse
 from app.modules.repository.service import RepositoryService
-from app.modules.repository.workers import execute_scan
+from app.worker import run_repository_scan
 
 router = APIRouter(prefix="/repositories", tags=["repositories"])
 
@@ -48,7 +48,6 @@ async def list_repositories(
 @router.post("/{repository_id}/scan", response_model=ScanResponse, status_code=202)
 async def request_scan(
     repository_id: UUID,
-    background_tasks: BackgroundTasks,
     _: dict[str, str] = Depends(
         require_role(MembershipRole.OWNER, MembershipRole.ADMIN, MembershipRole.MEMBER)
     ),
@@ -56,13 +55,7 @@ async def request_scan(
     settings: Settings = Depends(get_settings),
 ) -> ScanResponse:
     repository, scan = await service.request_scan(repository_id, UUID(_["org"]))
-    if not settings.database_url:
-        raise RuntimeError("Repository scans require CODEATLAS_DATABASE_URL")
-    background_tasks.add_task(
-        execute_scan,
-        settings.database_url,
-        scan.id,
-        repository.clone_url,
-        repository.default_branch,
-    )
+    if not settings.redis_url:
+        raise RuntimeError("Repository scans require CODEATLAS_REDIS_URL")
+    run_repository_scan.delay(str(scan.id), repository.clone_url, repository.default_branch)
     return ScanResponse.model_validate(scan, from_attributes=True)

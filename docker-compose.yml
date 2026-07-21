@@ -17,6 +17,21 @@ services:
       redis:
         condition: service_started
 
+  worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    command: celery -A app.worker.celery_app worker --loglevel=INFO
+    environment:
+      CODEATLAS_DATABASE_URL: postgresql+psycopg://codeatlas:codeatlas@postgres:5432/codeatlas
+      CODEATLAS_NEO4J_URI: bolt://neo4j:7687
+      CODEATLAS_REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
   postgres:
     image: pgvector/pgvector:pg16
     environment:
