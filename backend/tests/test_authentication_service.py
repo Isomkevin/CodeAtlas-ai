@@ -68,6 +68,9 @@ def test_github_sign_in_provisions_owner_workspace() -> None:
         async def touch_login(self, _):
             return None
 
+        async def upsert_github_credential(self, *_):
+            return None
+
         async def commit(self):
             self.committed = True
 
@@ -76,13 +79,16 @@ def test_github_sign_in_provisions_owner_workspace() -> None:
         repository, Settings(environment="test", allowed_origins=[])
     )
 
-    async def profile(_: str) -> dict[str, str]:
-        return {
-            "email": "engineer@example.com",
-            "login": "engineer",
-            "name": "Engineer",
-            "avatar_url": "https://example.com/avatar.png",
-        }
+    async def profile(_: str) -> tuple[dict[str, str], str]:
+        return (
+            {
+                "email": "engineer@example.com",
+                "login": "engineer",
+                "name": "Engineer",
+                "avatar_url": "https://example.com/avatar.png",
+            },
+            "github-token",
+        )
 
     auth_service._fetch_github_profile = profile  # type: ignore[method-assign]
     state = auth_service._encode({"purpose": "github_oauth", "nonce": "test"}, timedelta(minutes=1))

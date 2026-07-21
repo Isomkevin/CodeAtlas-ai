@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.authentication.models import (
     AuditLog,
+    GitHubCredential,
     Membership,
     MembershipRole,
     Organization,
@@ -79,4 +80,22 @@ class AuthenticationRepository:
                 actor_id=actor_id,
             )
         )
+        await self._session.flush()
+
+    async def upsert_github_credential(
+        self, user_id: UUID, github_login: str, encrypted_access_token: str
+    ) -> None:
+        credential = await self._session.scalar(
+            select(GitHubCredential).where(GitHubCredential.user_id == user_id)
+        )
+        if credential is None:
+            credential = GitHubCredential(
+                user_id=user_id,
+                github_login=github_login,
+                encrypted_access_token=encrypted_access_token,
+            )
+            self._session.add(credential)
+        else:
+            credential.github_login = github_login
+            credential.encrypted_access_token = encrypted_access_token
         await self._session.flush()

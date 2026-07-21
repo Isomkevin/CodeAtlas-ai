@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     access_token_ttl_minutes: int = Field(default=30, ge=5, le=1440)
     github_client_id: str | None = None
     github_client_secret: SecretStr | None = None
+    github_token_encryption_key: SecretStr | None = None
     github_oauth_redirect_uri: AnyHttpUrl | None = None
     otel_service_name: str = "codeatlas-api"
     log_level: str = Field(default="INFO", pattern="^(DEBUG|INFO|WARNING|ERROR|CRITICAL)$")
@@ -42,6 +43,10 @@ class Settings(BaseSettings):
             "development-"
         ):
             raise ValueError("CODEATLAS_JWT_SECRET must be configured for production")
+        if self.environment == "production" and self.github_token_encryption_key is None:
+            raise ValueError(
+                "CODEATLAS_GITHUB_TOKEN_ENCRYPTION_KEY must be configured for production"
+            )
         return self
 
 

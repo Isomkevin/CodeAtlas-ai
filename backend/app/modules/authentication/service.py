@@ -6,6 +6,7 @@ from urllib.parse import urlencode
 
 import httpx
 import jwt
+from cryptography.fernet import Fernet
 from fastapi import HTTPException, status
 
 from app.config import Settings
@@ -48,7 +49,7 @@ class AuthenticationService:
         if self._repository is None:
             raise RuntimeError("GitHub sign-in requires a persistence repository")
         self.validate_oauth_state(state)
-        profile = await self._fetch_github_profile(code)
+        profile, github_access_token = await self._fetch_github_profile(code)
         email = profile["email"].lower()
         user = await self._repository.find_user_by_email(email)
         if user is None:
@@ -79,6 +80,9 @@ class AuthenticationService:
             membership, organization = membership_and_organization
             role = membership.role
         await self._repository.touch_login(user)
+        await self._repository.upsert_github_credential(
+            user.id, profile["login"], self._encrypt_github_token(github_access_token)
+        )
         await self._repository.add_audit(
             action="session.created",
             resource_type="session",
@@ -116,7 +120,7 @@ class AuthenticationService:
             raise HTTPException(status_code=401, detail="Invalid access token")
         return claims
 
-    async def _fetch_github_profile(self, code: str) -> dict[str, str]:
+    async def _fetch_github_profile(self, code: str) -> tuple[dict[str, str], str]:
         if not all(
             [
                 self._settings.github_client_id,
@@ -166,12 +170,23 @@ class AuthenticationService:
             raise HTTPException(
                 status_code=422, detail="A verified primary GitHub email is required"
             )
-        return {
-            "email": email,
-            "login": profile["login"],
-            "name": profile.get("name") or "",
-            "avatar_url": profile.get("avatar_url") or "",
-        }
+        return (
+            {
+                "email": email,
+                "login": profile["login"],
+                "name": profile.get("name") or "",
+                "avatar_url": profile.get("avatar_url") or "",
+            },
+            access_token,
+        )
+
+    def _encrypt_github_token(self, access_token: str) -> str:
+        key = self._settings.github_token_encryption_key
+        if key is None:
+            if self._settings.environment == "production":
+                raise RuntimeError("GitHub token encryption key is not configured")
+            return access_token
+        return Fernet(key.get_secret_value().encode()).encrypt(access_token.encode()).decode()
 
     def _encode(self, claims: dict[str, str], lifetime: timedelta) -> str:
         now = datetime.now(UTC)
