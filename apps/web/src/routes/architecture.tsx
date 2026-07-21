@@ -3,11 +3,12 @@ import { PageHeader } from "@/components/app-shell";
 import { KindBadge } from "@/components/atlas-ui";
 import { ArchitectureGraph } from "@/components/architecture-graph";
 import { AiChat } from "@/components/ai-chat";
-import { nodeColors, type NodeKind } from "@/lib/mock-data";
+import { graphNodeKind, nodeColors, type NodeKind } from "@/lib/graph-ui";
 import {
   listRepositories,
   loadArchitectureGraph,
   requestRepositoryScan,
+  subscribeRepositoryEvents,
   type ApiRepository,
   type ArchitectureGraph as ApiArchitectureGraph,
 } from "@/lib/api";
@@ -35,10 +36,11 @@ function ArchitecturePage() {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isScanning, setIsScanning] = useState(false);
+  const [scanState, setScanState] = useState<"idle" | "queued" | "running">("idle");
   const repository = repositories[0] ?? null;
   const archNodes = useMemo(() => graph?.nodes.map((node) => ({
     id: node.id,
-    kind: node.kind === "external_module" ? "infra" : "module" as NodeKind,
+    kind: graphNodeKind(node.kind) as NodeKind,
     label: node.name,
     sub: node.properties.path ?? node.kind,
   })) ?? [], [graph]);
@@ -90,12 +92,43 @@ function ArchitecturePage() {
     return () => { active = false; };
   }, [repository]);
 
+  useEffect(() => {
+    if (!repository) return;
+    return subscribeRepositoryEvents(
+      repository.id,
+      (event) => {
+        if (event.type === "scan.running") {
+          setScanState("running");
+          return;
+        }
+        if (event.type === "scan.failed") {
+          setScanState("idle");
+          setError(event.message ?? "Repository scan failed");
+          return;
+        }
+        setScanState("idle");
+        void loadArchitectureGraph(repository.id)
+          .then((value) => {
+            setGraph(value);
+            setExpanded([repository.id]);
+            setSelectedId(value.nodes[0]?.id ?? null);
+            setError(null);
+          })
+          .catch((reason: unknown) => {
+            setError(reason instanceof Error ? reason.message : "Unable to load updated architecture graph");
+          });
+      },
+      () => setError("Live scan updates are unavailable. Refresh this page to read the latest graph."),
+    );
+  }, [repository]);
+
   const scan = async () => {
     if (!repository) return;
     setIsScanning(true);
     setError(null);
     try {
       await requestRepositoryScan(repository.id);
+      setScanState("queued");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to queue scan");
     } finally {
@@ -133,8 +166,8 @@ function ArchitecturePage() {
             <button className="inline-flex items-center gap-2 rounded-lg border border-border bg-panel px-3 py-2 text-sm hover:bg-panel/80 transition-colors">
               <GitCompare className="h-4 w-4" /> Compare <span className="font-mono text-muted-foreground">v41 → v42</span>
             </button>
-            <button onClick={scan} disabled={!repository || isScanning} className="inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 transition-opacity disabled:cursor-not-allowed disabled:opacity-50">
-              <ScanLine className="h-4 w-4" /> {isScanning ? "Scan queued" : "Scan"}
+            <button onClick={scan} disabled={!repository || isScanning || scanState !== "idle"} className="inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 transition-opacity disabled:cursor-not-allowed disabled:opacity-50">
+              <ScanLine className="h-4 w-4" /> {isScanning ? "Queueing scan" : scanState === "queued" ? "Scan queued" : scanState === "running" ? "Scanning" : "Scan"}
             </button>
           </>
         }

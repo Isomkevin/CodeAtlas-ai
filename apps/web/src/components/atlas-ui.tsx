@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { nodeColors, type NodeKind } from "@/lib/mock-data";
+import { nodeColors, type NodeKind } from "@/lib/graph-ui";
 import type { ReactNode } from "react";
 import { motion } from "framer-motion";
 

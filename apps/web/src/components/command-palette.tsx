@@ -7,7 +7,7 @@ import {
   LayoutDashboard, GitBranch, Network, Waypoints, BookOpen, Bot, History, Settings,
   Sparkles, Play, FileText, Plus, Zap,
 } from "lucide-react";
-import { repositories, archNodes } from "@/lib/mock-data";
+import { listRepositories, loadArchitectureGraph, type ApiRepository, type ArchitectureGraphNode } from "@/lib/api";
 
 type Ctx = { open: () => void; close: () => void };
 const CommandCtx = createContext<Ctx>({ open: () => {}, close: () => {} });
@@ -16,6 +16,8 @@ export function useCommandPalette() { return useContext(CommandCtx); }
 
 export function CommandPaletteProvider({ children }: { children: ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [repositories, setRepositories] = useState<ApiRepository[]>([]);
+  const [nodes, setNodes] = useState<ArchitectureGraphNode[]>([]);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -27,6 +29,18 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    void listRepositories()
+      .then(async (items) => {
+        if (!active) return;
+        setRepositories(items);
+        if (items[0]) setNodes((await loadArchitectureGraph(items[0].id)).nodes);
+      })
+      .catch(() => undefined);
+    return () => { active = false; };
   }, []);
 
   const go = useCallback((to: string) => {
@@ -63,15 +77,15 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
           <CommandGroup heading="Repositories">
             {repositories.slice(0, 6).map((r) => (
               <CommandItem key={r.id} onSelect={() => go("/repositories")}>
-                <GitBranch /> {r.name} <span className="ml-auto text-xs text-muted-foreground">{r.language}</span>
+                <GitBranch /> {r.full_name} <span className="ml-auto text-xs text-muted-foreground">{r.default_branch}</span>
               </CommandItem>
             ))}
           </CommandGroup>
           <CommandSeparator />
           <CommandGroup heading="Architecture nodes">
-            {archNodes.slice(0, 6).map((n) => (
+            {nodes.slice(0, 6).map((n) => (
               <CommandItem key={n.id} onSelect={() => go("/architecture")}>
-                <Network /> {n.label} <span className="ml-auto text-xs text-muted-foreground">{n.sub}</span>
+                <Network /> {n.name} <span className="ml-auto text-xs text-muted-foreground">{n.properties.path ?? n.kind}</span>
               </CommandItem>
             ))}
           </CommandGroup>

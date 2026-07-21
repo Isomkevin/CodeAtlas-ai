@@ -4,7 +4,7 @@ import ReactFlow, {
   Handle, Position, type NodeProps, type Node, type Edge,
 } from "reactflow";
 import "reactflow/dist/style.css";
-import { nodeColors, type NodeKind } from "@/lib/mock-data";
+import { nodeColors, type NodeKind } from "@/lib/graph-ui";
 import { Database, Server, Boxes, Zap, Cpu, GitBranch, Sparkles } from "lucide-react";
 
 const iconFor: Record<NodeKind, React.ComponentType<{ className?: string }>> = {

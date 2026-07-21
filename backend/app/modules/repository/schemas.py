@@ -35,3 +35,9 @@ class ScanResponse(BaseModel):
     completed_at: datetime | None
     summary: dict
     error: str | None
+
+
+class GitHubWebhookResponse(BaseModel):
+    accepted: bool
+    event: str
+    queued_scans: int

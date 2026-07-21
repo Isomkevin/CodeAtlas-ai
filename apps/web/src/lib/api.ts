@@ -26,6 +26,20 @@ export type ArchitectureGraph = {
   edges: ArchitectureGraphEdge[];
 };
 
+export type GraphVersion = {
+  id: string;
+  repository_id: string;
+  scan_id: string;
+  sequence: number;
+  parent_version_id: string | null;
+  commit_sha: string;
+  status: "projecting" | "ready" | "failed";
+  summary: Record<string, unknown>;
+  error: string | null;
+  created_at: string;
+  completed_at: string | null;
+};
+
 export type ArchitectureArtifact = {
   id: string;
   repository_id: string;
@@ -44,6 +58,13 @@ export type ImplementationPlan = {
   plan_json: { tasks?: Array<{ id: string; title: string; path?: string }> };
   pull_request_url: string | null;
   error: string | null;
+};
+
+export type RepositoryEvent = {
+  type: "scan.running" | "scan.completed" | "scan.failed";
+  scan_id: string;
+  graph_version_id?: string;
+  message?: string;
 };
 
 export const apiBaseUrl = import.meta.env.VITE_CODEATLAS_API_URL ?? "http://localhost:8000";
@@ -74,8 +95,35 @@ export function loadArchitectureGraph(repositoryId: string) {
   return apiRequest<ArchitectureGraph>(`/repositories/${repositoryId}/graph`);
 }
 
+export function listGraphVersions(repositoryId: string) {
+  return apiRequest<GraphVersion[]>(`/repositories/${repositoryId}/graph/versions`);
+}
+
 export function requestRepositoryScan(repositoryId: string) {
   return apiRequest(`/repositories/${repositoryId}/scan`, { method: "POST" });
+}
+
+export function subscribeRepositoryEvents(
+  repositoryId: string,
+  onEvent: (event: RepositoryEvent) => void,
+  onError?: () => void,
+) {
+  const token = window.sessionStorage.getItem("codeatlas.access_token");
+  if (!token) return () => undefined;
+  const endpoint = new URL(apiBaseUrl);
+  endpoint.protocol = endpoint.protocol === "https:" ? "wss:" : "ws:";
+  endpoint.pathname = `${endpoint.pathname.replace(/\/$/, "")}/api/v1/repositories/${repositoryId}/events`;
+  endpoint.searchParams.set("access_token", token);
+  const socket = new WebSocket(endpoint);
+  socket.onmessage = (message) => {
+    try {
+      onEvent(JSON.parse(message.data) as RepositoryEvent);
+    } catch {
+      onError?.();
+    }
+  };
+  socket.onerror = () => onError?.();
+  return () => socket.close();
 }
 
 export function connectRepository(url: string) {

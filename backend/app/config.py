@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     github_client_secret: SecretStr | None = None
     github_token_encryption_key: SecretStr | None = None
     github_oauth_redirect_uri: AnyHttpUrl | None = None
+    github_webhook_secret: SecretStr | None = None
     ai_base_url: AnyHttpUrl = "https://api.openai.com/v1"
     ai_api_key: SecretStr | None = None
     ai_model: str = "gpt-4.1-mini"
@@ -53,6 +54,8 @@ class Settings(BaseSettings):
             raise ValueError(
                 "CODEATLAS_GITHUB_TOKEN_ENCRYPTION_KEY must be configured for production"
             )
+        if self.environment == "production" and self.github_webhook_secret is None:
+            raise ValueError("CODEATLAS_GITHUB_WEBHOOK_SECRET must be configured for production")
         if self.environment == "production" and not all(
             [self.database_url, self.neo4j_uri, self.redis_url]
         ):

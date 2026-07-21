@@ -92,7 +92,7 @@ This repository contains both the platform implementation and the AI-Executable 
 
 CodeAtlas is implemented as a modular FastAPI monolith. The canonical graph is an immutable, versioned Neo4j projection created by the scan worker from PostgreSQL source facts. Python uses the standard AST; JavaScript and TypeScript use Tree-sitter AST adapters. Every graph-backed artifact, drift observation, chat response, impact analysis, and implementation plan references a specific graph version.
 
-Implemented modules include tenant JWT/GitHub OAuth/RBAC, encrypted GitHub credentials, private repository scanning, Celery/Redis scan jobs, architecture graph versions and diffs, Markdown/Mermaid/Draw.io/C4 artifacts, graph-only intelligence, WebSocket scan events, approval-gated plans and GitHub PR creation, and an MCP stdio bridge. The existing Architecture screen now loads the live graph and queues scans through the API.
+Implemented modules include tenant JWT/GitHub OAuth/RBAC, encrypted GitHub credentials, signed GitHub push webhooks, private repository scanning, Celery/Redis scan jobs, architecture graph versions and diffs, Markdown/Mermaid/Draw.io/C4 artifacts, graph-only intelligence, WebSocket scan events, approval-gated plans and GitHub PR creation, and an MCP stdio bridge. The existing Repository and Architecture screens use the live API; Architecture consumes scan WebSocket events and refreshes its graph when a projection completes.
 
 ## Run locally
 
@@ -102,7 +102,7 @@ Start platform dependencies and the API:
 docker compose up --build
 ```
 
-The API is available at `http://localhost:8000`; the API container applies Alembic migrations before startup. Copy `.env.example` to `.env` and configure a unique JWT secret, Fernet GitHub-token encryption key, and GitHub OAuth client credentials before authentication. The compose file supplies local PostgreSQL, Neo4j, and Redis endpoints.
+The API is available at `http://localhost:8000`; the API container applies Alembic migrations before startup. Copy `.env.example` to `.env` and configure a unique JWT secret, Fernet GitHub-token encryption key, GitHub OAuth client credentials, and GitHub webhook secret before authentication. The compose file supplies local PostgreSQL, Neo4j, and Redis endpoints.
 
 Start the canonical frontend separately:
 
@@ -136,3 +136,7 @@ uv run python -m app.mcp_server
 ```
 
 Every implementation plan is a draft until an owner or administrator approves it. Only then can CodeAtlas open a GitHub pull request from a branch prepared by a coding agent.
+
+## GitHub push refreshes
+
+Configure a GitHub repository webhook for `https://<api-host>/api/v1/github/webhooks`, select `application/json`, subscribe to push events, and use the value in `CODEATLAS_GITHUB_WEBHOOK_SECRET`. CodeAtlas checks GitHub's raw-body `X-Hub-Signature-256` HMAC before processing the payload. Only non-deletion pushes to a connected repository's configured default branch queue a scan; the worker then rebuilds the canonical graph and pushes the outcome to authenticated Architecture clients.

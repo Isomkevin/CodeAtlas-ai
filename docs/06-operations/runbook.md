@@ -27,7 +27,12 @@ Before a schema-changing release, create a PostgreSQL backup and capture the Neo
 - API responses include `nosniff`, deny framing, no-referrer, and no-store protections.
 - Redis fixed-window limits protect API clients; an unavailable production limiter fails closed with HTTP 503.
 - GitHub OAuth access tokens are encrypted at rest; Celery messages carry only scan IDs, never clone credentials.
+- GitHub webhook requests are accepted only after raw-body `X-Hub-Signature-256` HMAC verification. The webhook secret is mandatory in production; invalid or missing signatures are rejected before JSON parsing or scan queueing.
 - Implementation plans require owner/admin approval before PR creation.
+
+## GitHub webhook configuration
+
+Create a GitHub webhook for `https://<api-host>/api/v1/github/webhooks`, use `application/json`, select push events, and set its secret to the deployed `CODEATLAS_GITHUB_WEBHOOK_SECRET` value. GitHub's `ping` event should return HTTP 202. CodeAtlas only queues a scan for a non-deletion push to the default branch of an active connected repository, then emits scan state through the authenticated repository WebSocket.
 
 ## Alerts and diagnosis
 

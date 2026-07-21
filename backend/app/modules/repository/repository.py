@@ -1,5 +1,7 @@
 """Persistence adapter owned by the repository module."""
 
+from __future__ import annotations
+
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -44,6 +46,19 @@ class RepositoryStore:
             (
                 await self._session.scalars(
                     select(Repository).where(Repository.organization_id == organization_id)
+                )
+            ).all()
+        )
+
+    async def list_by_full_name(self, full_name: str) -> list[Repository]:
+        """Return active tenant connections for a GitHub repository webhook."""
+        return list(
+            (
+                await self._session.scalars(
+                    select(Repository).where(
+                        Repository.full_name == full_name,
+                        Repository.status == "active",
+                    )
                 )
             ).all()
         )

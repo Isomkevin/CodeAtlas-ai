@@ -1,9 +1,14 @@
 """Repository lifecycle service; parsing is delegated to worker infrastructure."""
 
+from __future__ import annotations
+
+import hashlib
+import hmac
 from urllib.parse import urlparse
 from uuid import UUID
 
 from fastapi import HTTPException
+from pydantic import SecretStr
 
 from app.modules.repository.models import Repository, RepositoryScan
 from app.modules.repository.repository import RepositoryStore
@@ -37,6 +42,34 @@ class RepositoryService:
 
     async def list(self, organization_id: UUID) -> list[Repository]:
         return await self._store.list(organization_id)
+
+    async def request_webhook_scans(
+        self, full_name: str, ref: str
+    ) -> list[tuple[Repository, RepositoryScan]]:
+        """Queue default-branch scans for every tenant connected to a pushed repository."""
+        queued: list[tuple[Repository, RepositoryScan]] = []
+        for repository in await self._store.list_by_full_name(full_name):
+            if ref != f"refs/heads/{repository.default_branch}":
+                continue
+            queued.append((repository, await self._store.queue_scan(repository.id)))
+        if queued:
+            await self._store.commit()
+        return queued
+
+    @staticmethod
+    def verify_github_webhook_signature(
+        body: bytes, signature: str | None, secret: SecretStr | None
+    ) -> None:
+        """Verify GitHub's raw-body HMAC before accepting a webhook payload."""
+        if secret is None:
+            raise HTTPException(status_code=503, detail="GitHub webhooks are not configured")
+        if not signature or not signature.startswith("sha256="):
+            raise HTTPException(status_code=401, detail="GitHub webhook signature is missing")
+        expected = "sha256=" + hmac.new(
+            secret.get_secret_value().encode(), body, hashlib.sha256
+        ).hexdigest()
+        if not hmac.compare_digest(expected, signature):
+            raise HTTPException(status_code=401, detail="GitHub webhook signature is invalid")
 
     @staticmethod
     def _normalize_github_url(value: str) -> tuple[str, str]:

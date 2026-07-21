@@ -1,332 +1,37 @@
-# docs/05-api/openapi.md
-
-# API Specification
-
-Version: 1.0
-
-Status: Canonical
-
-Architecture Style
-
-REST + WebSocket + MCP
-
----
-
-# Authentication
-
-GitHub OAuth
-
-Google OAuth
-
-JWT
-
-API Keys
-
-Organization Tokens
-
-Implemented authentication endpoints
-
-GET /auth/github/authorize
-
-Returns the GitHub OAuth authorization URL with a signed, short-lived state value.
-
-GET /auth/github/callback
-
-Exchanges the GitHub authorization code, validates a verified primary email, provisions an initial organization for a new user, writes audit events, and sends the tenant-scoped JWT to the trusted web-app popup opener. The JWT is never placed in the callback URL.
-
-GET /auth/session/claims
-
-Validates a bearer token and returns its subject, organization, and role claims.
-
-Roles
-
-owner, admin, member, viewer
-
----
-
-# Base URL
-
-/api/v1
-
-## Platform endpoints
-
-GET /health
-
-Liveness probe.
-
-GET /ready
-
-Readiness probe. Dependency probes are added as each corresponding production adapter is provisioned.
-
-GET /metrics
-
-Prometheus scrape endpoint.
-
-GET /docs
-
-Interactive OpenAPI documentation for implemented endpoints.
-
----
-
-# Repository APIs
-
-POST /repositories
-
-Import repository.
-
-GET /repositories
-
-List repositories.
-
-GET /repositories/{id}
-
-Repository details.
-
-DELETE /repositories/{id}
-
-Archive repository.
-
-POST /repositories/{id}/sync
-
-Incremental sync.
-
-POST /repositories/{id}/scan
-
-Full scan.
-
-GET /repositories/{id}/status
-
-Indexing status.
-
----
-
-# Architecture APIs
-
-GET /architecture
-
-Architecture summary.
-
-GET /architecture/graph
-
-Architecture graph.
-
-POST /architecture/query
-
-Graph query.
-
-POST /architecture/explain
-
-AI explanation.
-
-POST /architecture/generate
-
-Regenerate architecture.
-
-POST /architecture/compare
-
-Compare graph versions.
-
-POST /architecture/validate
-
-Architecture validation.
-
----
-
-# Documentation APIs
-
-GET /docs
-
-List documentation.
-
-POST /docs/generate
-
-Generate documentation.
-
-POST /docs/readme
-
-Generate README.
-
-POST /docs/adr
-
-Generate ADR.
-
-POST /docs/runbook
-
-Generate Runbook.
-
----
-
-# Diagram APIs
-
-POST /diagrams/drawio
-
-Generate Draw.io.
-
-POST /diagrams/mermaid
-
-Generate Mermaid.
-
-POST /diagrams/c4
-
-Generate C4.
-
-POST /diagrams/erd
-
-Generate ERD.
-
-POST /diagrams/deployment
-
-Generate deployment diagram.
-
----
-
-# AI APIs
-
-POST /ai/chat
-
-Architecture Chat.
-
-POST /ai/plan
-
-Implementation planning.
-
-POST /ai/review
-
-Architecture review.
-
-POST /ai/refactor
-
-Refactoring suggestions.
-
-POST /ai/implement
-
-Architecture-to-Code.
-
-POST /ai/tasks
-
-Task generation.
-
----
-
-# Knowledge Graph APIs
-
-GET /graph
-
-Graph metadata.
-
-POST /graph/query
-
-Cypher query.
-
-POST /graph/search
-
-Semantic search.
-
-POST /graph/traverse
-
-Relationship traversal.
-
-GET /graph/history
-
-Version history.
-
----
-
-# Drift APIs
-
-POST /drift/check
-
-Detect drift.
-
-GET /drift/history
-
-Historical drift.
-
-POST /drift/fix
-
-Generate fix plan.
-
----
-
-# GitHub APIs
-
-POST /github/pr
-
-Generate Pull Request.
-
-POST /github/review
-
-AI review.
-
-POST /github/commit
-
-Commit.
-
-POST /github/branch
-
-Create branch.
-
----
-
-# MCP APIs
-
-GET /mcp/tools
-
-Tool discovery.
-
-GET /mcp/resources
-
-Resource discovery.
-
-POST /mcp/invoke
-
-Tool execution.
-
----
-
-# WebSocket Events
-
-repository.scan.started
-
-repository.scan.completed
-
-architecture.updated
-
-graph.updated
-
-documentation.generated
-
-diagram.generated
-
-implementation.started
-
-implementation.completed
-
-drift.detected
-
-agent.completed
 # CodeAtlas API surface
 
-All API paths are prefixed with `/api/v1`. Repository, graph, artifact, intelligence, and implementation endpoints require a tenant-scoped JWT bearer token.
+All HTTP paths are prefixed with `/api/v1`. Except for health probes, the GitHub OAuth callback, and the signed GitHub webhook, endpoints require a tenant-scoped JWT bearer token. The live OpenAPI contract is at `/api/v1/openapi.json`.
 
-## Repository and graph
+## Platform and identity
 
-- `GET /repositories/discover`, `POST /repositories`, and `GET /repositories` manage GitHub-backed repositories.
-- `POST /repositories/{repository_id}/scan` queues a durable scan.
-- `WS /repositories/{repository_id}/events?access_token=...` emits `scan.running`, `scan.completed`, and `scan.failed` events.
-- `GET /repositories/{repository_id}/graph`, `/graph/versions`, and `/graph/diff` read immutable graph versions and differences.
+- `GET /health`, `GET /ready`, and `GET /metrics` provide liveness, dependency readiness, and Prometheus metrics.
+- `GET /auth/github/authorize` begins GitHub OAuth with a signed, short-lived state value.
+- `GET /auth/github/callback` validates the callback, provisions tenant identity as needed, stores encrypted credentials, and posts a JWT to the trusted web-app opener.
+- `GET /auth/session/claims` validates the current bearer token.
+
+## Repository ingestion
+
+- `GET /repositories/discover`, `POST /repositories`, and `GET /repositories` manage GitHub-backed repository connections.
+- `POST /repositories/{repository_id}/scan` queues a durable scan using a Celery message that contains only the scan ID.
+- `POST /github/webhooks` verifies GitHub's `X-Hub-Signature-256` raw-body HMAC. A valid default-branch push queues scans for active tenant connections; no source content is accepted or persisted from the webhook payload.
+- `WS /repositories/{repository_id}/events?access_token=...` emits `scan.running`, `scan.completed`, and `scan.failed` events to an authorized tenant client.
+
+## Canonical architecture graph
+
+- `GET /repositories/{repository_id}/graph` reads an immutable graph version; an optional `version_id` selects an older version.
+- `GET /repositories/{repository_id}/graph/versions` lists versions.
+- `GET /repositories/{repository_id}/graph/diff?from_version_id=...&to_version_id=...` returns graph deltas.
 
 ## Graph-derived artifacts and intelligence
 
-- `POST /repositories/{repository_id}/artifacts` accepts `documentation`, `mermaid`, `drawio`, or `c4`; list and get endpoints return immutable content.
-- `POST /repositories/{repository_id}/chat` uses only graph context and returns node citations.
+- `POST`, `GET`, and `GET /{artifact_id}` at `/repositories/{repository_id}/artifacts` generate and read immutable `documentation`, `mermaid`, `drawio`, and `c4` artifacts.
+- `POST /repositories/{repository_id}/chat` answers over graph context only and returns citations.
 - `GET /repositories/{repository_id}/impact/{node_id}` performs a bounded graph traversal.
-- `POST` and `GET /repositories/{repository_id}/drift` create and read drift observations.
+- `POST` and `GET /repositories/{repository_id}/drift` detect and list architecture drift observations.
 
-## Architecture-to-code
+## Architecture-to-code and MCP
 
-- `POST /repositories/{repository_id}/implementation-plans` creates a graph-version-bound draft.
+- `POST` and `GET /repositories/{repository_id}/implementation-plans`, plus `GET /{plan_id}`, create and read graph-version-bound plans.
 - `POST /repositories/{repository_id}/implementation-plans/{plan_id}/approve` is owner/admin-only.
-- `POST /repositories/{repository_id}/implementation-plans/{plan_id}/pull-request` is owner/admin-only and opens a GitHub PR from an existing agent branch.
-
-The live OpenAPI contract is served at `/api/v1/openapi.json`.
+- `POST /repositories/{repository_id}/implementation-plans/{plan_id}/pull-request` is owner/admin-only and opens a PR from a branch prepared by a coding agent.
+- The stdio MCP bridge provides `get_architecture_graph` and `create_implementation_plan` using a tenant-scoped API token. It never exposes raw repository files.
