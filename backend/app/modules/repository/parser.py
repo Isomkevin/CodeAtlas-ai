@@ -1,12 +1,9 @@
 """Deterministic, language-aware source fact extraction."""
 
 import ast
+import re
 from dataclasses import dataclass
 from pathlib import Path
-
-import tree_sitter_javascript
-import tree_sitter_typescript
-from tree_sitter import Language, Parser
 
 
 @dataclass(frozen=True)
@@ -29,19 +26,8 @@ def extract_source_facts(root: Path) -> list[SourceFact]:
         relative = path.relative_to(root).as_posix()
         if path.suffix == ".py":
             facts.extend(_extract_python_facts(path, relative))
-        elif path.suffix in {".js", ".jsx"}:
-            facts.extend(
-                _extract_tree_sitter_facts(
-                    path, relative, tree_sitter_javascript.language()
-                )
-            )
-        elif path.suffix in {".ts", ".tsx"}:
-            language = (
-                tree_sitter_typescript.language_tsx()
-                if path.suffix == ".tsx"
-                else tree_sitter_typescript.language_typescript()
-            )
-            facts.extend(_extract_tree_sitter_facts(path, relative, language))
+        elif path.suffix in {".js", ".jsx", ".ts", ".tsx"}:
+            facts.extend(_extract_javascript_facts(path, relative))
     return facts
 
 
@@ -52,7 +38,7 @@ def _extract_python_facts(path: Path, relative: str) -> list[SourceFact]:
         return []
     facts: list[SourceFact] = []
     for node in ast.walk(tree):
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
             facts.append(SourceFact(relative, "function", node.name, node.lineno))
         elif isinstance(node, ast.ClassDef):
             facts.append(SourceFact(relative, "class", node.name, node.lineno))
@@ -64,55 +50,27 @@ def _extract_python_facts(path: Path, relative: str) -> list[SourceFact]:
     return facts
 
 
-def _extract_tree_sitter_facts(path: Path, relative: str, capsule: object) -> list[SourceFact]:
+def _extract_javascript_facts(path: Path, relative: str) -> list[SourceFact]:
+    """Extract high-signal JS/TS symbols without loading a native parser in worker processes."""
     try:
-        source = path.read_bytes()
-    except OSError:
+        source = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
         return []
-    parser = Parser(Language(capsule))
-    tree = parser.parse(source)
     facts: list[SourceFact] = []
-    stack = [tree.root_node]
-    while stack:
-        node = stack.pop()
-        stack.extend(reversed(node.children))
-        name_node = node.child_by_field_name("name")
-        if node.type in {"class_declaration", "interface_declaration"} and name_node:
-            facts.append(
-                SourceFact(
-                    relative, "class", _node_text(name_node, source), node.start_point.row + 1
-                )
-            )
-        elif node.type in {"function_declaration", "method_definition"} and name_node:
-            facts.append(
-                SourceFact(
-                    relative, "function", _node_text(name_node, source), node.start_point.row + 1
-                )
-            )
-        elif node.type == "variable_declarator" and name_node:
-            value = node.child_by_field_name("value")
-            if value and value.type in {"arrow_function", "function_expression"}:
-                facts.append(
-                    SourceFact(
-                        relative,
-                        "function",
-                        _node_text(name_node, source),
-                        node.start_point.row + 1,
-                    )
-                )
-        elif node.type == "import_statement":
-            source_node = node.child_by_field_name("source")
-            if source_node:
-                facts.append(
-                    SourceFact(
-                        relative,
-                        "import",
-                        _node_text(source_node, source).strip("\"'"),
-                        node.start_point.row + 1,
-                    )
-                )
+    patterns = (
+        ("class", re.compile(r"\b(?:class|interface)\s+([A-Za-z_$][\w$]*)")),
+        ("function", re.compile(r"\bfunction\s+([A-Za-z_$][\w$]*)")),
+        (
+            "function",
+            re.compile(
+                r"\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>"
+            ),
+        ),
+        ("import", re.compile(r"\bfrom\s+[\"']([^\"']+)[\"']")),
+        ("import", re.compile(r"\bimport\s+[\"']([^\"']+)[\"']")),
+    )
+    for kind, pattern in patterns:
+        for match in pattern.finditer(source):
+            line = source.count("\n", 0, match.start()) + 1
+            facts.append(SourceFact(relative, kind, match.group(1), line))
     return facts
-
-
-def _node_text(node, source: bytes) -> str:
-    return source[node.start_byte : node.end_byte].decode("utf-8", errors="replace")

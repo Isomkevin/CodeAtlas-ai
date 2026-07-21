@@ -24,25 +24,31 @@ function SettingsPage() {
   const [active, setActive] = useState("integrations");
   const [githubConnected, setGithubConnected] = useState(false);
   const [githubError, setGithubError] = useState<string | null>(null);
+  const [demoAvailable, setDemoAvailable] = useState(false);
+  const [demoSigningIn, setDemoSigningIn] = useState(false);
 
   useEffect(() => {
-    setGithubConnected(Boolean(sessionStorage.getItem("codeatlas.accessToken")));
+    setGithubConnected(Boolean(sessionStorage.getItem("codeatlas.access_token")));
     const receiveSession = (event: MessageEvent<unknown>) => {
       if (event.origin !== new URL(apiBaseUrl).origin || typeof event.data !== "object" || event.data === null) return;
       const message = event.data as { type?: string; accessToken?: string };
       if (message.type === "codeatlas:session" && message.accessToken) {
-        sessionStorage.setItem("codeatlas.accessToken", message.accessToken);
+        sessionStorage.setItem("codeatlas.access_token", message.accessToken);
         setGithubConnected(true);
         setGithubError(null);
       }
     };
     window.addEventListener("message", receiveSession);
+    void fetch(`${apiBaseUrl}/api/v1/health`)
+      .then((response) => response.json() as Promise<{ environment?: string }>)
+      .then((health) => setDemoAvailable(health.environment === "development"))
+      .catch(() => undefined);
     return () => window.removeEventListener("message", receiveSession);
   }, []);
 
   const connectGitHub = async (enabled: boolean) => {
     if (!enabled) {
-      sessionStorage.removeItem("codeatlas.accessToken");
+      sessionStorage.removeItem("codeatlas.access_token");
       setGithubConnected(false);
       return;
     }
@@ -55,6 +61,22 @@ function SettingsPage() {
     } catch (error) {
       setGithubError(error instanceof Error ? error.message : "Unable to connect GitHub.");
       setGithubConnected(false);
+    }
+  };
+
+  const createDevelopmentSession = async () => {
+    setDemoSigningIn(true);
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/v1/auth/development/session`, { method: "POST" });
+      if (!response.ok) throw new Error("Local demo sign-in is not enabled.");
+      const { access_token } = await response.json() as { access_token: string };
+      sessionStorage.setItem("codeatlas.access_token", access_token);
+      setGithubConnected(true);
+      setGithubError(null);
+    } catch (error) {
+      setGithubError(error instanceof Error ? error.message : "Unable to create local demo session.");
+    } finally {
+      setDemoSigningIn(false);
     }
   };
 
@@ -115,6 +137,7 @@ function SettingsPage() {
               ))}
             </div>
             {githubError && <p className="mt-3 text-xs text-danger">{githubError}</p>}
+            {demoAvailable && !githubConnected && <button onClick={() => { void createDevelopmentSession(); }} disabled={demoSigningIn} className="mt-3 rounded-lg border border-primary/40 bg-primary/10 px-3 py-2 text-xs font-medium text-primary disabled:opacity-50">{demoSigningIn ? "Creating demo session…" : "Use local demo session"}</button>}
           </Card>
 
           <Card className="p-5">

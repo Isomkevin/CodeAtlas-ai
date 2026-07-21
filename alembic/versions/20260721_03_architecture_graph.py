@@ -12,7 +12,7 @@ depends_on = None
 
 def upgrade() -> None:
     graph_version_status = postgresql.ENUM(
-        "projecting", "ready", "failed", name="graph_version_status"
+        "projecting", "ready", "failed", name="graph_version_status", create_type=False
     )
     graph_version_status.create(op.get_bind(), checkfirst=True)
     op.add_column(

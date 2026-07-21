@@ -12,7 +12,7 @@ depends_on = None
 
 def upgrade() -> None:
     plan_status = postgresql.ENUM(
-        "draft", "approved", "pull_request_opened", "failed", name="implementation_plan_status"
+        "draft", "approved", "pull_request_opened", "failed", name="implementation_plan_status", create_type=False
     )
     plan_status.create(op.get_bind(), checkfirst=True)
     op.create_table(

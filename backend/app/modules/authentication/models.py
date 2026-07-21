@@ -67,7 +67,12 @@ class Membership(Base):
     )
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), nullable=False)
     role: Mapped[MembershipRole] = mapped_column(
-        Enum(MembershipRole, name="membership_role"), nullable=False
+        Enum(
+            MembershipRole,
+            name="membership_role",
+            values_callable=lambda enum: [member.value for member in enum],
+        ),
+        nullable=False,
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     organization: Mapped[Organization] = relationship(back_populates="memberships")

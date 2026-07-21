@@ -11,7 +11,9 @@ depends_on = None
 
 
 def upgrade() -> None:
-    scan_status = postgresql.ENUM("queued", "running", "completed", "failed", name="scan_status")
+    scan_status = postgresql.ENUM(
+        "queued", "running", "completed", "failed", name="scan_status", create_type=False
+    )
     scan_status.create(op.get_bind(), checkfirst=True)
     op.create_table(
         "repositories",

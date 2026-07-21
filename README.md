@@ -114,6 +114,8 @@ bun run dev
 
 Vite will print the available local URL. If the checked-in lockfile’s Lovable package cache is unavailable to your environment, perform a local-only public-registry installation without changing `bun.lock`, then run `bun run dev`.
 
+For a local demo without configured GitHub OAuth, Compose explicitly enables a development-only session. Open Settings and select **Use local demo session**. It may scan public GitHub repositories anonymously; private repositories still require GitHub OAuth. This endpoint is unavailable unless both the environment is `development` and `CODEATLAS_ALLOW_DEVELOPMENT_LOGIN=true`; production startup rejects that setting.
+
 Run backend verification from the repository root:
 
 ```powershell
@@ -125,7 +127,7 @@ See [implementation roadmap](docs/05-codex/implementation-roadmap.md) for milest
 
 ## Runtime workflows
 
-Run a worker outside Compose with `uv run celery -A app.worker.celery_app worker --loglevel=INFO`. The Architecture page reads `/repositories/{id}/graph` and queues scans through the live API. Set `VITE_CODEATLAS_API_URL=http://localhost:8000` if the frontend uses a non-default API host.
+Run a worker outside Compose with `uv run celery -A app.worker.celery_app worker --pool=solo --loglevel=INFO` for native parser safety in a local environment. The Architecture page reads `/repositories/{id}/graph` and queues scans through the live API. Set `VITE_CODEATLAS_API_URL=http://localhost:8000` if the frontend uses a non-default API host.
 
 The MCP stdio bridge exposes only `get_architecture_graph` and `create_implementation_plan`; it does not expose raw repository files. Start it with a tenant-scoped API token:
 

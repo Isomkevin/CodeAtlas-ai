@@ -29,7 +29,13 @@ class ArchitectureArtifact(Base):
     graph_version_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("architecture_graph_versions.id"), index=True
     )
-    kind: Mapped[ArtifactKind] = mapped_column(Enum(ArtifactKind, name="artifact_kind"))
+    kind: Mapped[ArtifactKind] = mapped_column(
+        Enum(
+            ArtifactKind,
+            name="artifact_kind",
+            values_callable=lambda enum: [member.value for member in enum],
+        )
+    )
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     metadata_json: Mapped[dict] = mapped_column("metadata", JSONB, nullable=False, default=dict)

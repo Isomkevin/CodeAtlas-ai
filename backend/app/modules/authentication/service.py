@@ -92,6 +92,41 @@ class AuthenticationService:
         await self._repository.commit()
         return self.mint_access_token(user, organization, role)
 
+    async def create_development_session(self) -> AccessToken:
+        """Create a deterministic local-only owner session for demo and smoke-test workflows."""
+        if self._repository is None:
+            raise RuntimeError("Development sign-in requires a persistence repository")
+        email = "demo@codeatlas.local"
+        user = await self._repository.find_user_by_email(email)
+        if user is None:
+            user = await self._repository.create_user(
+                email=email,
+                username="codeatlas-demo",
+                display_name="CodeAtlas Demo",
+                avatar_url=None,
+            )
+            organization = await self._repository.create_organization(
+                name="CodeAtlas Demo Workspace", slug="codeatlas-demo", owner=user
+            )
+            role = MembershipRole.OWNER
+            await self._repository.add_audit(
+                action="development_session.created",
+                resource_type="session",
+                organization_id=organization.id,
+                actor_id=user.id,
+            )
+        else:
+            membership_and_organization = await self._repository.find_first_membership(user.id)
+            if membership_and_organization is None:
+                raise HTTPException(
+                    status_code=403, detail="Demo user has no organization membership"
+                )
+            membership, organization = membership_and_organization
+            role = membership.role
+        await self._repository.touch_login(user)
+        await self._repository.commit()
+        return self.mint_access_token(user, organization, role)
+
     def mint_access_token(
         self, user: User, organization: Organization, role: MembershipRole
     ) -> AccessToken:

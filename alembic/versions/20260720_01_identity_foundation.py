@@ -16,7 +16,9 @@ depends_on = None
 
 
 def upgrade() -> None:
-    membership_role = postgresql.ENUM("owner", "admin", "member", "viewer", name="membership_role")
+    membership_role = postgresql.ENUM(
+        "owner", "admin", "member", "viewer", name="membership_role", create_type=False
+    )
     membership_role.create(op.get_bind(), checkfirst=True)
     op.create_table(
         "organizations",

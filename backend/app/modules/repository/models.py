@@ -47,7 +47,12 @@ class RepositoryScan(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     repository_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("repositories.id"), index=True)
     status: Mapped[ScanStatus] = mapped_column(
-        Enum(ScanStatus, name="scan_status"), default=ScanStatus.QUEUED
+        Enum(
+            ScanStatus,
+            name="scan_status",
+            values_callable=lambda enum: [member.value for member in enum],
+        ),
+        default=ScanStatus.QUEUED,
     )
     commit_sha: Mapped[str | None] = mapped_column(String(64))
     summary: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)

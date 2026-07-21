@@ -2,7 +2,7 @@
 
 import json
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import Settings, get_settings
 from app.database import get_session
 from app.modules.authentication.repository import AuthenticationRepository
-from app.modules.authentication.schemas import GitHubAuthorization, GitHubCallbackQuery
+from app.modules.authentication.schemas import AccessToken, GitHubAuthorization, GitHubCallbackQuery
 from app.modules.authentication.service import AuthenticationService
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
@@ -62,9 +62,20 @@ async def github_callback(
     return HTMLResponse(document, headers={"Cache-Control": "no-store"})
 
 
+@router.post("/development/session", response_model=AccessToken, include_in_schema=False)
+async def development_session(
+    settings: Settings = Depends(get_settings),
+    service: AuthenticationService = Depends(get_persistent_authentication_service),
+) -> AccessToken:
+    """Issue a local demo session only when deliberately enabled in development."""
+    if settings.environment != "development" or not settings.allow_development_login:
+        raise HTTPException(status_code=404, detail="Not found")
+    return await service.create_development_session()
+
+
 @router.get("/session/claims", summary="Validate the current bearer token")
 async def session_claims(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     service: AuthenticationService = Depends(get_authentication_service),
-) -> dict[str, str]:
+) -> dict[str, str | int]:
     return service.decode_access_token(credentials.credentials)

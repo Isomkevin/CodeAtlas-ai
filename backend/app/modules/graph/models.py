@@ -40,7 +40,12 @@ class ArchitectureGraphVersion(Base):
     commit_sha: Mapped[str] = mapped_column(String(64), nullable=False)
     fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
     status: Mapped[GraphVersionStatus] = mapped_column(
-        Enum(GraphVersionStatus, name="graph_version_status"), default=GraphVersionStatus.PROJECTING
+        Enum(
+            GraphVersionStatus,
+            name="graph_version_status",
+            values_callable=lambda enum: [member.value for member in enum],
+        ),
+        default=GraphVersionStatus.PROJECTING,
     )
     summary: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -4,8 +4,10 @@ import asyncio
 from datetime import UTC, datetime
 from uuid import UUID
 
+from fastapi import HTTPException
 from neo4j import AsyncGraphDatabase
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings
 from app.database import create_session_factory
@@ -17,6 +19,26 @@ from app.modules.graph.service import GraphService
 from app.modules.graph.store import Neo4jGraphStore
 from app.modules.repository.models import Repository, RepositoryScan, ScanStatus, SourceFactRecord
 from app.modules.repository.scanner import scan_repository
+
+
+async def _access_token_for_scan(
+    repository: Repository, session: AsyncSession, settings: Settings
+) -> str | None:
+    """Use OAuth when configured; allow anonymous public clones only in local demo mode."""
+    if repository.credential_owner_id is None:
+        return None
+    try:
+        return await GitHubCredentialService(
+            AuthenticationRepository(session), settings
+        ).access_token_for(repository.credential_owner_id)
+    except HTTPException as error:
+        if (
+            error.status_code == 403
+            and settings.environment == "development"
+            and settings.allow_development_login
+        ):
+            return None
+        raise
 
 
 async def execute_scan(database_url: str, scan_id: UUID, settings: Settings) -> None:
@@ -40,11 +62,7 @@ async def execute_scan(database_url: str, scan_id: UUID, settings: Settings) -> 
             {"type": "scan.running", "scan_id": str(scan.id)},
         )
         try:
-            token = None
-            if repository.credential_owner_id:
-                token = await GitHubCredentialService(
-                    AuthenticationRepository(session), settings
-                ).access_token_for(repository.credential_owner_id)
+            token = await _access_token_for_scan(repository, session, settings)
             commit_sha, summary = await asyncio.to_thread(
                 scan_repository, repository.clone_url, repository.default_branch, token
             )

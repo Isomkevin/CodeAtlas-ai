@@ -12,7 +12,7 @@ depends_on = None
 
 def upgrade() -> None:
     artifact_kind = postgresql.ENUM(
-        "documentation", "mermaid", "drawio", "c4", name="artifact_kind"
+        "documentation", "mermaid", "drawio", "c4", name="artifact_kind", create_type=False
     )
     artifact_kind.create(op.get_bind(), checkfirst=True)
     op.create_table(

@@ -29,7 +29,12 @@ class ImplementationPlan(Base):
     requested_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), index=True)
     approved_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     status: Mapped[PlanStatus] = mapped_column(
-        Enum(PlanStatus, name="implementation_plan_status"), default=PlanStatus.DRAFT
+        Enum(
+            PlanStatus,
+            name="implementation_plan_status",
+            values_callable=lambda enum: [member.value for member in enum],
+        ),
+        default=PlanStatus.DRAFT,
     )
     change_request: Mapped[str] = mapped_column(Text, nullable=False)
     plan_json: Mapped[dict] = mapped_column("plan", JSONB, nullable=False, default=dict)
