@@ -6,11 +6,9 @@ from enum import StrEnum
 
 from sqlalchemy import DateTime, Enum, ForeignKey, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-
-class Base(DeclarativeBase):
-    """Base for operational PostgreSQL entities."""
+from app.database import Base
 
 
 class MembershipRole(StrEnum):

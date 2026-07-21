@@ -3,8 +3,13 @@
 from collections.abc import AsyncIterator
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import DeclarativeBase
 
 from app.config import get_settings
+
+
+class Base(DeclarativeBase):
+    """Shared metadata root; modules own their tables, not this infrastructure class."""
 
 
 def _async_database_url(database_url: str) -> str:
