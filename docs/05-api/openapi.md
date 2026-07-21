@@ -305,3 +305,28 @@ implementation.completed
 drift.detected
 
 agent.completed
+# CodeAtlas API surface
+
+All API paths are prefixed with `/api/v1`. Repository, graph, artifact, intelligence, and implementation endpoints require a tenant-scoped JWT bearer token.
+
+## Repository and graph
+
+- `GET /repositories/discover`, `POST /repositories`, and `GET /repositories` manage GitHub-backed repositories.
+- `POST /repositories/{repository_id}/scan` queues a durable scan.
+- `WS /repositories/{repository_id}/events?access_token=...` emits `scan.running`, `scan.completed`, and `scan.failed` events.
+- `GET /repositories/{repository_id}/graph`, `/graph/versions`, and `/graph/diff` read immutable graph versions and differences.
+
+## Graph-derived artifacts and intelligence
+
+- `POST /repositories/{repository_id}/artifacts` accepts `documentation`, `mermaid`, `drawio`, or `c4`; list and get endpoints return immutable content.
+- `POST /repositories/{repository_id}/chat` uses only graph context and returns node citations.
+- `GET /repositories/{repository_id}/impact/{node_id}` performs a bounded graph traversal.
+- `POST` and `GET /repositories/{repository_id}/drift` create and read drift observations.
+
+## Architecture-to-code
+
+- `POST /repositories/{repository_id}/implementation-plans` creates a graph-version-bound draft.
+- `POST /repositories/{repository_id}/implementation-plans/{plan_id}/approve` is owner/admin-only.
+- `POST /repositories/{repository_id}/implementation-plans/{plan_id}/pull-request` is owner/admin-only and opens a GitHub PR from an existing agent branch.
+
+The live OpenAPI contract is served at `/api/v1/openapi.json`.

@@ -15,8 +15,9 @@ def test_connect_normalizes_github_url() -> None:
         async def find(self, *_):
             return None
 
-        async def create(self, _, full_name, clone_url, branch):
+        async def create(self, _, full_name, clone_url, branch, credential_owner_id):
             created.update(full_name=full_name, clone_url=clone_url, branch=branch)
+            assert credential_owner_id is None
             return SimpleNamespace()
 
         async def commit(self):

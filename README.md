@@ -90,9 +90,9 @@ This repository contains both the platform implementation and the AI-Executable 
 
 ## Current implementation
 
-The backend is a modular FastAPI monolith. The platform foundation is available at `/api/v1/health`, `/api/v1/ready`, `/metrics`, and `/api/v1/docs`. Identity and tenant foundations are implemented: PostgreSQL migrations create organizations, users, memberships, and audit records; GitHub OAuth provisions a first workspace and returns a tenant-scoped JWT to the existing Settings UI.
+CodeAtlas is implemented as a modular FastAPI monolith. The canonical graph is an immutable, versioned Neo4j projection created by the scan worker from PostgreSQL source facts. Python uses the standard AST; JavaScript and TypeScript use Tree-sitter AST adapters. Every graph-backed artifact, drift observation, chat response, impact analysis, and implementation plan references a specific graph version.
 
-The Architecture Graph remains the planned canonical source of truth. Repository ingestion, source-graph construction, and Neo4j projection are the next implementation milestone.
+Implemented modules include tenant JWT/GitHub OAuth/RBAC, encrypted GitHub credentials, private repository scanning, Celery/Redis scan jobs, architecture graph versions and diffs, Markdown/Mermaid/Draw.io/C4 artifacts, graph-only intelligence, WebSocket scan events, approval-gated plans and GitHub PR creation, and an MCP stdio bridge. The existing Architecture screen now loads the live graph and queues scans through the API.
 
 ## Run locally
 
@@ -102,7 +102,7 @@ Start platform dependencies and the API:
 docker compose up --build
 ```
 
-The API is available at `http://localhost:8000`; copy `.env.example` to `.env` and configure a unique JWT secret before using authentication. GitHub sign-in also requires a GitHub OAuth client ID, secret, and callback URL.
+The API is available at `http://localhost:8000`; the API container applies Alembic migrations before startup. Copy `.env.example` to `.env` and configure a unique JWT secret, Fernet GitHub-token encryption key, and GitHub OAuth client credentials before authentication. The compose file supplies local PostgreSQL, Neo4j, and Redis endpoints.
 
 Start the canonical frontend separately:
 
@@ -122,3 +122,17 @@ uv run ruff check backend alembic
 ```
 
 See [implementation roadmap](docs/05-codex/implementation-roadmap.md) for milestone status and [API specification](docs/05-api/openapi.md) for the API surface.
+
+## Runtime workflows
+
+Run a worker outside Compose with `uv run celery -A app.worker.celery_app worker --loglevel=INFO`. The Architecture page reads `/repositories/{id}/graph` and queues scans through the live API. Set `VITE_CODEATLAS_API_URL=http://localhost:8000` if the frontend uses a non-default API host.
+
+The MCP stdio bridge exposes only `get_architecture_graph` and `create_implementation_plan`; it does not expose raw repository files. Start it with a tenant-scoped API token:
+
+```powershell
+$env:CODEATLAS_MCP_API_BASE_URL="http://localhost:8000/api/v1"
+$env:CODEATLAS_MCP_TOKEN="<tenant-scoped JWT>"
+uv run python -m app.mcp_server
+```
+
+Every implementation plan is a draft until an owner or administrator approves it. Only then can CodeAtlas open a GitHub pull request from a branch prepared by a coding agent.

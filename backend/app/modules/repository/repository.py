@@ -21,13 +21,19 @@ class RepositoryStore:
         )
 
     async def create(
-        self, organization_id: UUID, full_name: str, clone_url: str, branch: str
+        self,
+        organization_id: UUID,
+        full_name: str,
+        clone_url: str,
+        branch: str,
+        credential_owner_id: UUID | None,
     ) -> Repository:
         repository = Repository(
             organization_id=organization_id,
             full_name=full_name,
             clone_url=clone_url,
             default_branch=branch,
+            credential_owner_id=credential_owner_id,
         )
         self._session.add(repository)
         await self._session.flush()

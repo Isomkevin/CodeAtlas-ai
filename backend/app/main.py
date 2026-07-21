@@ -11,7 +11,12 @@ from fastapi.responses import JSONResponse
 from app.api.v1.health import router as health_router
 from app.config import Settings, get_settings
 from app.modules.authentication.controller import router as authentication_router
+from app.modules.documentation.controller import router as documentation_router
+from app.modules.graph.controller import router as graph_router
+from app.modules.implementation.controller import router as implementation_router
+from app.modules.intelligence.controller import router as intelligence_router
 from app.modules.repository.controller import router as repository_router
+from app.modules.repository.events import router as repository_events_router
 from app.observability import configure_observability
 from app.shared.errors import (
     DomainError,
@@ -67,6 +72,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(health_router, prefix=resolved_settings.api_v1_prefix)
     app.include_router(authentication_router, prefix=resolved_settings.api_v1_prefix)
     app.include_router(repository_router, prefix=resolved_settings.api_v1_prefix)
+    app.include_router(repository_events_router, prefix=resolved_settings.api_v1_prefix)
+    app.include_router(graph_router, prefix=resolved_settings.api_v1_prefix)
+    app.include_router(documentation_router, prefix=resolved_settings.api_v1_prefix)
+    app.include_router(intelligence_router, prefix=resolved_settings.api_v1_prefix)
+    app.include_router(implementation_router, prefix=resolved_settings.api_v1_prefix)
     configure_observability(app, resolved_settings)
     return app
 

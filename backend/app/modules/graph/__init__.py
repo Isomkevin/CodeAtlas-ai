@@ -1,0 +1,1 @@
+"""Canonical architecture graph module."""

@@ -20,3 +20,11 @@ Status: active. The Architecture Graph is the product source of truth; parsers w
 ## Execution policy
 
 Each work package must add its API contract, validation, structured logging, metrics, tests, and module documentation. A package is only complete after formatting/linting and its relevant test suite pass; it is then committed before the next package begins. Frontend changes are limited to replacing mock data and wiring existing interactions to API/WebSocket contracts.
+
+## Delivery status
+
+Repository ingestion now supports authenticated GitHub clones, Python AST parsing, and JavaScript/TypeScript Tree-sitter AST parsing. Scans persist source facts, produce immutable Neo4j graph versions, and publish progress through Redis.
+
+Graph versions are the only source for generated Markdown, Mermaid, Draw.io XML, C4/PlantUML, drift records, chat context, impact analysis, and implementation plans. Owner/admin approval is required before an agent-created branch can become a GitHub pull request. The tenant-scoped MCP bridge exposes graph retrieval and plan creation without exposing source files.
+
+The local/container target includes applied migrations, dependency readiness, metrics, tracing, security headers, Redis rate limiting, CI checks, and the operations runbook. A GitHub App must still be provisioned by deployment operations before webhook installation can be enabled.

@@ -3,12 +3,19 @@ import { PageHeader } from "@/components/app-shell";
 import { KindBadge } from "@/components/atlas-ui";
 import { ArchitectureGraph } from "@/components/architecture-graph";
 import { AiChat } from "@/components/ai-chat";
-import { archNodes, archEdges, nodeColors, type NodeKind } from "@/lib/mock-data";
+import { nodeColors, type NodeKind } from "@/lib/mock-data";
+import {
+  listRepositories,
+  loadArchitectureGraph,
+  requestRepositoryScan,
+  type ApiRepository,
+  type ArchitectureGraph as ApiArchitectureGraph,
+} from "@/lib/api";
 import {
   ChevronRight, ChevronDown, Filter, GitCompare, LayoutGrid, Maximize2, Search, ScanLine,
   GitBranch, Database, Server, Boxes, Zap, Cpu, Sparkles, ArrowRight, ArrowLeft,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 export const Route = createFileRoute("/architecture")({
   head: () => ({ meta: [{ title: "Architecture · CodeAtlas" }] }),
@@ -19,19 +26,82 @@ const iconFor: Record<NodeKind, React.ComponentType<{ className?: string }>> = {
   repo: GitBranch, service: Server, module: Boxes, api: Zap, database: Database, infra: Cpu, ai: Sparkles,
 };
 
-// Group nodes into synthetic "repositories" so the explorer reflects the mock graph
-const explorerGroups = [
-  { id: "atlas-core", label: "atlas-core", ids: ["core", "graphdb", "queue"] },
-  { id: "atlas-web",  label: "atlas-web",  ids: ["web", "gateway", "auth"] },
-  { id: "atlas-agents", label: "atlas-agents", ids: ["agents", "vector", "search"] },
-  { id: "payments-svc", label: "payments-svc", ids: ["payments", "postgres"] },
-  { id: "monorepo",   label: "monorepo",   ids: ["repo", "sdk", "cli"] },
-];
-
 function ArchitecturePage() {
-  const [selectedId, setSelectedId] = useState<string | null>("payments");
-  const [expanded, setExpanded] = useState<string[]>(["atlas-core", "payments-svc"]);
+  const [repositories, setRepositories] = useState<ApiRepository[]>([]);
+  const [graph, setGraph] = useState<ApiArchitectureGraph | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<string[]>([]);
   const [query, setQuery] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isScanning, setIsScanning] = useState(false);
+  const repository = repositories[0] ?? null;
+  const archNodes = useMemo(() => graph?.nodes.map((node) => ({
+    id: node.id,
+    kind: node.kind === "external_module" ? "infra" : "module" as NodeKind,
+    label: node.name,
+    sub: node.properties.path ?? node.kind,
+  })) ?? [], [graph]);
+  const archEdges = useMemo(() => graph?.edges.map((edge) => ({
+    id: edge.id,
+    source: edge.source_id,
+    target: edge.target_id,
+    kind: edge.kind,
+  })) ?? [], [graph]);
+  const explorerGroups = useMemo(() => repository ? [{
+    id: repository.id,
+    label: repository.full_name,
+    ids: archNodes.map((node) => node.id),
+  }] : [], [archNodes, repository]);
+
+  useEffect(() => {
+    let active = true;
+    listRepositories()
+      .then((items) => {
+        if (active) setRepositories(items);
+      })
+      .catch((reason: unknown) => {
+        if (active) setError(reason instanceof Error ? reason.message : "Unable to load repositories");
+      })
+      .finally(() => {
+        if (active) setIsLoading(false);
+      });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!repository) return;
+    let active = true;
+    setIsLoading(true);
+    loadArchitectureGraph(repository.id)
+      .then((value) => {
+        if (active) {
+          setGraph(value);
+          setExpanded([repository.id]);
+          setSelectedId(value.nodes[0]?.id ?? null);
+        }
+      })
+      .catch((reason: unknown) => {
+        if (active) setError(reason instanceof Error ? reason.message : "Unable to load architecture graph");
+      })
+      .finally(() => {
+        if (active) setIsLoading(false);
+      });
+    return () => { active = false; };
+  }, [repository]);
+
+  const scan = async () => {
+    if (!repository) return;
+    setIsScanning(true);
+    setError(null);
+    try {
+      await requestRepositoryScan(repository.id);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Unable to queue scan");
+    } finally {
+      setIsScanning(false);
+    }
+  };
   const selected = archNodes.find((n) => n.id === selectedId) ?? null;
 
   const connections = useMemo(() => {
@@ -55,21 +125,22 @@ function ArchitecturePage() {
   return (
     <div className="flex flex-col">
       <PageHeader
-        eyebrow="atlas-core"
-        title={<span>Architecture <span className="text-muted-foreground font-normal">/ main</span></span>}
+        eyebrow={repository?.full_name ?? "Architecture"}
+        title={<span>Architecture <span className="text-muted-foreground font-normal">/ {repository?.default_branch ?? "no repository"}</span></span>}
         description="Live, interactive graph of services, modules, APIs, and data. Click a node to inspect."
         actions={
           <>
             <button className="inline-flex items-center gap-2 rounded-lg border border-border bg-panel px-3 py-2 text-sm hover:bg-panel/80 transition-colors">
               <GitCompare className="h-4 w-4" /> Compare <span className="font-mono text-muted-foreground">v41 → v42</span>
             </button>
-            <button className="inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 transition-opacity">
-              <ScanLine className="h-4 w-4" /> Scan
+            <button onClick={scan} disabled={!repository || isScanning} className="inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 transition-opacity disabled:cursor-not-allowed disabled:opacity-50">
+              <ScanLine className="h-4 w-4" /> {isScanning ? "Scan queued" : "Scan"}
             </button>
           </>
         }
       />
 
+      {error && <div className="mx-5 mb-3 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div>}
       <div className="grid min-h-[calc(100vh-140px)] grid-cols-1 lg:grid-cols-[260px_1fr_340px]">
         {/* Left: repository explorer */}
         <aside className="hidden lg:flex flex-col border-r border-border/70 bg-sidebar/40">
@@ -152,12 +223,18 @@ function ArchitecturePage() {
           </div>
 
           <div className="dot-bg relative min-h-[420px] flex-1">
-            <ArchitectureGraph onSelect={setSelectedId} />
+            {isLoading ? (
+              <div className="flex h-full min-h-[420px] items-center justify-center text-sm text-muted-foreground">Loading architecture graph…</div>
+            ) : archNodes.length ? (
+              <ArchitectureGraph graphNodes={archNodes} graphEdges={archEdges} onSelect={setSelectedId} />
+            ) : (
+              <div className="flex h-full min-h-[420px] items-center justify-center text-center text-sm text-muted-foreground">Connect and scan a repository to build its architecture graph.</div>
+            )}
           </div>
 
           {/* Bottom AI console */}
           <div className="h-[280px] border-t border-border/70 bg-panel/20">
-            <AiChat compact />
+            <AiChat compact repositoryId={repository?.id} />
           </div>
         </div>
 

@@ -13,11 +13,15 @@ class RepositoryService:
     def __init__(self, store: RepositoryStore) -> None:
         self._store = store
 
-    async def connect(self, organization_id: UUID, url: str, branch: str) -> Repository:
+    async def connect(
+        self, organization_id: UUID, url: str, branch: str, credential_owner_id: UUID | None = None
+    ) -> Repository:
         full_name, clone_url = self._normalize_github_url(url)
         if await self._store.find(organization_id, full_name):
             raise HTTPException(status_code=409, detail="Repository is already connected")
-        repository = await self._store.create(organization_id, full_name, clone_url, branch)
+        repository = await self._store.create(
+            organization_id, full_name, clone_url, branch, credential_owner_id
+        )
         await self._store.commit()
         return repository
 

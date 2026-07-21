@@ -43,7 +43,9 @@ async def connect_repository(
     ),
     service: RepositoryService = Depends(get_repository_service),
 ) -> RepositoryResponse:
-    repository = await service.connect(UUID(claims["org"]), request.url, request.default_branch)
+    repository = await service.connect(
+        UUID(claims["org"]), request.url, request.default_branch, UUID(claims["sub"])
+    )
     return RepositoryResponse.model_validate(repository, from_attributes=True)
 
 
@@ -83,5 +85,5 @@ async def request_scan(
     repository, scan = await service.request_scan(repository_id, UUID(_["org"]))
     if not settings.redis_url:
         raise RuntimeError("Repository scans require CODEATLAS_REDIS_URL")
-    run_repository_scan.delay(str(scan.id), repository.clone_url, repository.default_branch)
+    run_repository_scan.delay(str(scan.id))
     return ScanResponse.model_validate(scan, from_attributes=True)

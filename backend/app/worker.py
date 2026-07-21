@@ -18,7 +18,7 @@ celery_app = Celery("codeatlas", broker=settings.redis_url, backend=settings.red
     retry_backoff=True,
     max_retries=3,
 )
-def run_repository_scan(scan_id: str, clone_url: str, branch: str) -> None:
+def run_repository_scan(scan_id: str) -> None:
     if not settings.database_url:
         raise RuntimeError("Repository worker requires CODEATLAS_DATABASE_URL")
-    asyncio.run(execute_scan(settings.database_url, UUID(scan_id), clone_url, branch))
+    asyncio.run(execute_scan(settings.database_url, UUID(scan_id), settings))

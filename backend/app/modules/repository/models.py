@@ -26,6 +26,9 @@ class Repository(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"), index=True)
+    credential_owner_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
     provider: Mapped[str] = mapped_column(String(24), nullable=False, default="github")
     full_name: Mapped[str] = mapped_column(String(255), nullable=False)
     clone_url: Mapped[str] = mapped_column(Text, nullable=False)

@@ -1,10 +1,10 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import ReactFlow, {
   Background, Controls, MiniMap, useNodesState, useEdgesState,
   Handle, Position, type NodeProps, type Node, type Edge,
 } from "reactflow";
 import "reactflow/dist/style.css";
-import { archNodes, archEdges, nodeColors, type NodeKind } from "@/lib/mock-data";
+import { nodeColors, type NodeKind } from "@/lib/mock-data";
 import { Database, Server, Boxes, Zap, Cpu, GitBranch, Sparkles } from "lucide-react";
 
 const iconFor: Record<NodeKind, React.ComponentType<{ className?: string }>> = {
@@ -38,30 +38,57 @@ function AtlasNode({ data, selected }: NodeProps<{ label: string; sub: string; k
 
 const nodeTypes = { atlas: AtlasNode };
 
-export function ArchitectureGraph({ onSelect }: { onSelect?: (id: string | null) => void }) {
+export type ArchitectureGraphItem = {
+  id: string;
+  kind: NodeKind;
+  label: string;
+  sub: string;
+};
+
+export type ArchitectureGraphLink = {
+  id: string;
+  source: string;
+  target: string;
+  kind: string;
+};
+
+export function ArchitectureGraph({
+  graphNodes,
+  graphEdges,
+  onSelect,
+}: {
+  graphNodes: ArchitectureGraphItem[];
+  graphEdges: ArchitectureGraphLink[];
+  onSelect?: (id: string | null) => void;
+}) {
   const initialNodes: Node[] = useMemo(
-    () => archNodes.map((n) => ({
+    () => graphNodes.map((n, index) => ({
       id: n.id,
-      position: { x: n.x, y: n.y },
+      position: { x: (index % 4) * 230, y: Math.floor(index / 4) * 120 },
       data: { label: n.label, sub: n.sub, kind: n.kind },
       type: "atlas",
     })),
-    [],
+    [graphNodes],
   );
   const initialEdges: Edge[] = useMemo(
-    () => archEdges.map((e, i) => ({
-      id: `e${i}`,
+    () => graphEdges.map((e) => ({
+      id: e.id,
       source: e.source,
       target: e.target,
       type: "smoothstep",
-      animated: e.animated,
-      style: { stroke: e.animated ? "var(--primary)" : "color-mix(in oklab, white 25%, transparent)", strokeWidth: 1.5 },
+      animated: e.kind === "imports",
+      style: { stroke: e.kind === "imports" ? "var(--primary)" : "color-mix(in oklab, white 25%, transparent)", strokeWidth: 1.5 },
     })),
-    [],
+    [graphEdges],
   );
 
-  const [nodes, , onNodesChange] = useNodesState(initialNodes);
-  const [edges, , onEdgesChange] = useEdgesState(initialEdges);
+  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+
+  useEffect(() => {
+    setNodes(initialNodes);
+    setEdges(initialEdges);
+  }, [initialEdges, initialNodes, setEdges, setNodes]);
 
   const handleSelect = useCallback((_: unknown, node: Node) => onSelect?.(node.id), [onSelect]);
   const handlePane = useCallback(() => onSelect?.(null), [onSelect]);

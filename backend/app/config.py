@@ -25,7 +25,10 @@ class Settings(BaseSettings):
     web_app_origin: AnyHttpUrl = "http://localhost:5173"
     database_url: str | None = None
     neo4j_uri: str | None = None
+    neo4j_username: str = "neo4j"
+    neo4j_password: SecretStr = SecretStr("codeatlas-development")
     redis_url: str | None = None
+    rate_limit_per_minute: int = Field(default=120, ge=10, le=10000)
     jwt_secret: SecretStr = SecretStr("development-secret-change-before-production")
     jwt_issuer: str = "codeatlas"
     jwt_audience: str = "codeatlas-web"
@@ -34,6 +37,9 @@ class Settings(BaseSettings):
     github_client_secret: SecretStr | None = None
     github_token_encryption_key: SecretStr | None = None
     github_oauth_redirect_uri: AnyHttpUrl | None = None
+    ai_base_url: AnyHttpUrl = "https://api.openai.com/v1"
+    ai_api_key: SecretStr | None = None
+    ai_model: str = "gpt-4.1-mini"
     otel_service_name: str = "codeatlas-api"
     log_level: str = Field(default="INFO", pattern="^(DEBUG|INFO|WARNING|ERROR|CRITICAL)$")
 
@@ -46,6 +52,13 @@ class Settings(BaseSettings):
         if self.environment == "production" and self.github_token_encryption_key is None:
             raise ValueError(
                 "CODEATLAS_GITHUB_TOKEN_ENCRYPTION_KEY must be configured for production"
+            )
+        if self.environment == "production" and not all(
+            [self.database_url, self.neo4j_uri, self.redis_url]
+        ):
+            raise ValueError(
+                "CODEATLAS_DATABASE_URL, CODEATLAS_NEO4J_URI, and CODEATLAS_REDIS_URL "
+                "must be configured for production"
             )
         return self
 

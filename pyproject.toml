@@ -13,6 +13,7 @@ dependencies = [
   "email-validator>=2.2,<3.0",
   "fastapi>=0.115,<1.0",
   "httpx>=0.28,<1.0",
+  "neo4j>=5.28,<6.0",
   "opentelemetry-api>=1.29,<2.0",
   "opentelemetry-instrumentation-fastapi>=0.50b0,<1.0",
   "opentelemetry-sdk>=1.29,<2.0",
@@ -22,6 +23,9 @@ dependencies = [
   "SQLAlchemy>=2.0,<3.0",
   "psycopg[binary]>=3.2,<4.0",
   "structlog>=24.4,<26.0",
+  "tree-sitter>=0.25,<1.0",
+  "tree-sitter-javascript>=0.23,<1.0",
+  "tree-sitter-typescript>=0.23,<1.0",
   "uvicorn[standard]>=0.32,<1.0",
 ]
 
@@ -48,6 +52,9 @@ src = ["backend"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
 ignore = ["B008"]
+
+[tool.ruff.lint.per-file-ignores]
+"alembic/versions/*.py" = ["E501"]
 
 [tool.coverage.run]
 branch = true
