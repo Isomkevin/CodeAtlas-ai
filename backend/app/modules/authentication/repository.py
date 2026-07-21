@@ -99,3 +99,8 @@ class AuthenticationRepository:
             credential.github_login = github_login
             credential.encrypted_access_token = encrypted_access_token
         await self._session.flush()
+
+    async def get_github_credential(self, user_id: UUID) -> GitHubCredential | None:
+        return await self._session.scalar(
+            select(GitHubCredential).where(GitHubCredential.user_id == user_id)
+        )
