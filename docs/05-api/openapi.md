@@ -24,11 +24,47 @@ API Keys
 
 Organization Tokens
 
+Implemented authentication endpoints
+
+GET /auth/github/authorize
+
+Returns the GitHub OAuth authorization URL with a signed, short-lived state value.
+
+GET /auth/github/callback
+
+Exchanges the GitHub authorization code, validates a verified primary email, provisions an initial organization for a new user, writes audit events, and sends the tenant-scoped JWT to the trusted web-app popup opener. The JWT is never placed in the callback URL.
+
+GET /auth/session/claims
+
+Validates a bearer token and returns its subject, organization, and role claims.
+
+Roles
+
+owner, admin, member, viewer
+
 ---
 
 # Base URL
 
 /api/v1
+
+## Platform endpoints
+
+GET /health
+
+Liveness probe.
+
+GET /ready
+
+Readiness probe. Dependency probes are added as each corresponding production adapter is provisioned.
+
+GET /metrics
+
+Prometheus scrape endpoint.
+
+GET /docs
+
+Interactive OpenAPI documentation for implemented endpoints.
 
 ---
 

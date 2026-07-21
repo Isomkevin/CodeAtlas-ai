@@ -9,7 +9,7 @@ Status: active. The Architecture Graph is the product source of truth; parsers w
 ## Milestones and work packages
 
 1. **Platform foundation** — application factory, configuration, observability, error contract, container topology, probes, and test baseline. Complete.
-2. **Identity and workspace** — PostgreSQL/Alembic, organizations, users, JWT, GitHub OAuth state flow, RBAC, audit events, and frontend session integration. In progress: persistence schema, JWT, OAuth state and callback exchange, tenant provisioning, audit events, and role policy are implemented; frontend session wiring follows with the GitHub integration work package.
+2. **Identity and workspace** — PostgreSQL/Alembic, organizations, users, JWT, GitHub OAuth state flow, RBAC, audit events, and frontend session integration. Complete: persistence schema, JWT, OAuth state and callback exchange, tenant provisioning, audit events, role policy, and the existing Settings GitHub control are wired to popup-based sign-in. GitHub OAuth client credentials and a unique production JWT secret remain deployment configuration.
 3. **Repository connections and ingestion** — GitHub installation/repository linking, encrypted credentials, webhook verification, scan lifecycle, Redis/Celery jobs, AST parser adapters, source-graph persistence.
 4. **Canonical architecture graph** — Neo4j constraints, graph versioning/diffs, architecture projection, traversal/query API, graph explorer integration.
 5. **Generated artifacts** — graph-derived documentation, Mermaid, Draw.io, C4 and artifact versioning; connect existing UI actions.
