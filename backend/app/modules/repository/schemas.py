@@ -13,6 +13,13 @@ class CreateRepositoryRequest(BaseModel):
     default_branch: str = Field(default="main", min_length=1, max_length=255)
 
 
+class DiscoverableRepository(BaseModel):
+    full_name: str
+    clone_url: str
+    default_branch: str
+    private: bool
+
+
 class RepositoryResponse(BaseModel):
     id: UUID
     full_name: str

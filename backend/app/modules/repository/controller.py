@@ -8,9 +8,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import Settings, get_settings
 from app.database import get_session
 from app.modules.authentication.dependencies import require_role
+from app.modules.authentication.github_credentials import GitHubCredentialService
 from app.modules.authentication.models import MembershipRole
+from app.modules.authentication.repository import AuthenticationRepository
+from app.modules.repository.github import GitHubRepositoryClient
 from app.modules.repository.repository import RepositoryStore
-from app.modules.repository.schemas import CreateRepositoryRequest, RepositoryResponse, ScanResponse
+from app.modules.repository.schemas import (
+    CreateRepositoryRequest,
+    DiscoverableRepository,
+    RepositoryResponse,
+    ScanResponse,
+)
 from app.modules.repository.service import RepositoryService
 from app.worker import run_repository_scan
 
@@ -19,6 +27,12 @@ router = APIRouter(prefix="/repositories", tags=["repositories"])
 
 def get_repository_service(session: AsyncSession = Depends(get_session)) -> RepositoryService:
     return RepositoryService(RepositoryStore(session))
+
+
+async def get_github_client(
+    session: AsyncSession = Depends(get_session), settings: Settings = Depends(get_settings)
+) -> GitHubRepositoryClient:
+    return GitHubRepositoryClient()
 
 
 @router.post("", response_model=RepositoryResponse, status_code=201)
@@ -31,6 +45,18 @@ async def connect_repository(
 ) -> RepositoryResponse:
     repository = await service.connect(UUID(claims["org"]), request.url, request.default_branch)
     return RepositoryResponse.model_validate(repository, from_attributes=True)
+
+
+@router.get("/discover", response_model=list[DiscoverableRepository])
+async def discover_repositories(
+    claims: dict[str, str] = Depends(require_role(*list(MembershipRole))),
+    session: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+) -> list[DiscoverableRepository]:
+    credential_service = GitHubCredentialService(AuthenticationRepository(session), settings)
+    token = await credential_service.access_token_for(UUID(claims["sub"]))
+    repositories = await GitHubRepositoryClient().list_repositories(token)
+    return [DiscoverableRepository.model_validate(repository) for repository in repositories]
 
 
 @router.get("", response_model=list[RepositoryResponse])
