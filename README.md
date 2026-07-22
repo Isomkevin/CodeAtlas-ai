@@ -131,6 +131,10 @@ uv run ruff check backend alembic
 
 See [implementation roadmap](docs/05-codex/implementation-roadmap.md) for milestone status and [API specification](docs/05-api/openapi.md) for the API surface.
 
+## Deploy to production
+
+The checked-in Compose stack is for local development only. The supported hosted deployment path uses Vercel for the existing frontend, Render for the API and Celery worker, Render Postgres and Key Value for operational data and Redis, and Neo4j Aura for the Architecture Graph. Follow the [production deployment guide](docs/06-operations/production-deployment.md) before exposing the application publicly.
+
 ## Runtime workflows
 
 Run a worker outside Compose with `uv run celery -A app.worker.celery_app worker --pool=solo --loglevel=INFO` for native parser safety in a local environment. The Architecture page reads `/repositories/{id}/graph` and queues scans through the live API. Set `VITE_CODEATLAS_API_URL=http://localhost:8000` if the frontend uses a non-default API host.

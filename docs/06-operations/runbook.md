@@ -1,5 +1,7 @@
 # CodeAtlas operations runbook
 
+For the provider-specific setup used by the hosted CodeAtlas frontend, see the [production deployment guide](production-deployment.md). It covers Vercel for the frontend, Render for the API and Celery worker, Render Postgres and Key Value, and Neo4j Aura.
+
 ## Start and validate
 
 1. Copy `.env.example` to `.env` and set production secrets outside source control.

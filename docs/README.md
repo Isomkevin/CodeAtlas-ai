@@ -9,5 +9,7 @@ The product specification and implementation records live here. The Architecture
 - [PostgreSQL schema](03-engineering/database/postgresql-schema.md)
 - [Knowledge Graph schema](04-database/knowledge-graph-schema.md)
 - [API specification](05-api/openapi.md)
+- [Production deployment](06-operations/production-deployment.md)
+- [Operations runbook](06-operations/runbook.md)
 - [MCP protocol](07-mcp/protocol.md)
 - [Implementation roadmap](05-codex/implementation-roadmap.md)
