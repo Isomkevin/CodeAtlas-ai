@@ -12,4 +12,5 @@ The product specification and implementation records live here. The Architecture
 - [Production deployment](06-operations/production-deployment.md)
 - [Operations runbook](06-operations/runbook.md)
 - [MCP protocol](07-mcp/protocol.md)
+- [MCP client setup](07-mcp/client-setup.md)
 - [Implementation roadmap](05-codex/implementation-roadmap.md)

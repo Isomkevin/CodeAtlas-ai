@@ -14,7 +14,12 @@ from app.modules.authentication.controller import router as authentication_route
 from app.modules.documentation.controller import router as documentation_router
 from app.modules.graph.controller import router as graph_router
 from app.modules.implementation.controller import router as implementation_router
-from app.modules.intelligence.controller import router as intelligence_router
+from app.modules.intelligence.controller import (
+    router as intelligence_router,
+)
+from app.modules.intelligence.controller import (
+    settings_router as intelligence_settings_router,
+)
 from app.modules.repository.controller import router as repository_router
 from app.modules.repository.events import router as repository_events_router
 from app.modules.repository.webhooks import router as repository_webhooks_router
@@ -78,6 +83,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(graph_router, prefix=resolved_settings.api_v1_prefix)
     app.include_router(documentation_router, prefix=resolved_settings.api_v1_prefix)
     app.include_router(intelligence_router, prefix=resolved_settings.api_v1_prefix)
+    app.include_router(intelligence_settings_router, prefix=resolved_settings.api_v1_prefix)
     app.include_router(implementation_router, prefix=resolved_settings.api_v1_prefix)
     configure_observability(app, resolved_settings)
     return app

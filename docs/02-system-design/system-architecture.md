@@ -434,6 +434,8 @@ Expose CodeAtlas capabilities to AI coding agents.
 
 Supported Clients
 
+Current shipping integrations are Cursor, Claude Desktop, Claude Code, and OpenClaw through the local stdio bridge. The remaining names below are roadmap targets; see [MCP client setup](../07-mcp/client-setup.md) for the tested configurations.
+
 OpenAI Codex
 
 Claude Code

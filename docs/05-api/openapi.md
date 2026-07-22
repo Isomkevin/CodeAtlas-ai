@@ -28,6 +28,9 @@ All HTTP paths are prefixed with `/api/v1`. Except for health probes, the GitHub
 - `POST /repositories/{repository_id}/chat` answers over graph context only and returns citations.
 - `GET /repositories/{repository_id}/impact/{node_id}` performs a bounded graph traversal.
 - `POST` and `GET /repositories/{repository_id}/drift` detect and list architecture drift observations.
+- `GET /ai/provider` returns the current workspace's AI-provider status without returning a secret.
+- `PUT /ai/provider` is owner/admin-only and stores an encrypted OpenAI-compatible BYOK key, base URL, and model for the workspace. Its model key overrides the deployment-level key for graph-context chat.
+- `DELETE /ai/provider` is owner/admin-only and removes the workspace key so chat falls back to the deployment key or deterministic graph-only mode.
 
 ## Architecture-to-code and MCP
 

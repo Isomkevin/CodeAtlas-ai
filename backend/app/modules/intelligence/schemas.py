@@ -3,7 +3,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import AnyHttpUrl, BaseModel, Field, SecretStr
 
 
 class ChatRequest(BaseModel):
@@ -33,3 +33,21 @@ class DriftResponse(BaseModel):
     severity: str
     message: str
     created_at: datetime
+
+
+class WorkspaceAIProviderUpdate(BaseModel):
+    """A key supplied by the workspace; it is encrypted and never returned."""
+
+    api_key: SecretStr = Field(min_length=8, max_length=512)
+    base_url: AnyHttpUrl = "https://api.openai.com/v1"
+    model: str = Field(default="gpt-4.1-mini", min_length=1, max_length=160)
+
+
+class WorkspaceAIProviderResponse(BaseModel):
+    configured: bool
+    source: str
+    provider: str | None = None
+    base_url: str | None = None
+    model: str | None = None
+    key_hint: str | None = None
+    updated_at: datetime | None = None

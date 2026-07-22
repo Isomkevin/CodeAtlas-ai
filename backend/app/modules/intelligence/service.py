@@ -1,15 +1,29 @@
 """Graph-only reasoning, impact analysis, and architecture drift detection."""
 
 from collections import deque
+from dataclasses import dataclass
 from uuid import UUID
 
 import httpx
+from cryptography.fernet import Fernet, InvalidToken
 
 from app.config import Settings
 from app.modules.graph.models import GraphEdge, GraphNode
 from app.modules.graph.service import GraphService
-from app.modules.intelligence.models import ArchitectureDrift
+from app.modules.intelligence.models import ArchitectureDrift, WorkspaceAIProvider
 from app.modules.intelligence.repository import IntelligenceRepository
+
+
+class AIConfigurationError(ValueError):
+    """Raised when a workspace AI configuration cannot be safely used."""
+
+
+@dataclass(frozen=True)
+class AIModelConfiguration:
+    api_key: str
+    base_url: str
+    model: str
+    source: str
 
 
 class ArchitectureIntelligenceService:
@@ -24,15 +38,20 @@ class ArchitectureIntelligenceService:
         self._settings = settings
 
     async def chat(
-        self, repository_id: UUID, question: str, version_id: UUID | None = None
+        self,
+        repository_id: UUID,
+        organization_id: UUID,
+        question: str,
+        version_id: UUID | None = None,
     ) -> tuple[str, str, UUID, list[str]]:
         version, nodes, edges = await self._graph.read_graph(repository_id, version_id)
         citations = self._matching_nodes(question, nodes)
         context = self._context(nodes, edges, citations)
         answer = self._deterministic_answer(question, nodes, edges, citations)
-        if self._settings.ai_api_key is not None:
-            answer = await self._enhance_with_model(question, context, answer)
-            mode = "model_graph_context"
+        configuration = await self._resolve_model_configuration(organization_id)
+        if configuration is not None:
+            answer = await self._enhance_with_model(question, context, answer, configuration)
+            mode = f"model_graph_context_{configuration.source}"
         else:
             mode = "deterministic_graph"
         return answer, mode, version.id, [node.id for node in citations]
@@ -96,6 +115,36 @@ class ArchitectureIntelligenceService:
     async def list_drifts(self, repository_id: UUID) -> list[ArchitectureDrift]:
         return await self._drifts.list(repository_id)
 
+    async def get_workspace_ai_provider(self, organization_id: UUID) -> WorkspaceAIProvider | None:
+        return await self._drifts.get_workspace_ai_provider(organization_id)
+
+    async def configure_workspace_ai_provider(
+        self,
+        organization_id: UUID,
+        configured_by: UUID,
+        api_key: str,
+        base_url: str,
+        model_name: str,
+    ) -> WorkspaceAIProvider:
+        if not api_key.strip():
+            raise AIConfigurationError("An AI API key is required")
+        provider = await self._drifts.upsert_workspace_ai_provider(
+            organization_id,
+            configured_by,
+            self._encrypt_workspace_api_key(api_key),
+            base_url.rstrip("/"),
+            model_name,
+            f"…{api_key[-4:]}",
+        )
+        await self._drifts.commit()
+        return provider
+
+    async def remove_workspace_ai_provider(self, organization_id: UUID) -> bool:
+        removed = await self._drifts.delete_workspace_ai_provider(organization_id)
+        if removed:
+            await self._drifts.commit()
+        return removed
+
     @staticmethod
     def _matching_nodes(question: str, nodes: list[GraphNode]) -> list[GraphNode]:
         words = {
@@ -149,10 +198,60 @@ class ArchitectureIntelligenceService:
             f"Direct relationships: {relation_text}."
         )
 
-    async def _enhance_with_model(self, question: str, context: str, fallback: str) -> str:
-        headers = {"Authorization": f"Bearer {self._settings.ai_api_key.get_secret_value()}"}
+    async def _resolve_model_configuration(
+        self, organization_id: UUID
+    ) -> AIModelConfiguration | None:
+        workspace_provider = await self._drifts.get_workspace_ai_provider(organization_id)
+        if workspace_provider is not None:
+            return AIModelConfiguration(
+                api_key=self._decrypt_workspace_api_key(workspace_provider.encrypted_api_key),
+                base_url=workspace_provider.base_url,
+                model=workspace_provider.model_name,
+                source="workspace_byok",
+            )
+        if self._settings.ai_api_key is None:
+            return None
+        return AIModelConfiguration(
+            api_key=self._settings.ai_api_key.get_secret_value(),
+            base_url=str(self._settings.ai_base_url).rstrip("/"),
+            model=self._settings.ai_model,
+            source="deployment_key",
+        )
+
+    def _encryption_key(self) -> bytes:
+        key = self._settings.ai_key_encryption_key or self._settings.github_token_encryption_key
+        if key is None:
+            raise AIConfigurationError(
+                "BYOK requires CODEATLAS_AI_KEY_ENCRYPTION_KEY or "
+                "CODEATLAS_GITHUB_TOKEN_ENCRYPTION_KEY"
+            )
+        return key.get_secret_value().encode()
+
+    def _encrypt_workspace_api_key(self, api_key: str) -> str:
+        return self._fernet().encrypt(api_key.encode()).decode()
+
+    def _decrypt_workspace_api_key(self, encrypted_api_key: str) -> str:
+        try:
+            return self._fernet().decrypt(encrypted_api_key.encode()).decode()
+        except (InvalidToken, UnicodeDecodeError) as error:
+            raise AIConfigurationError(
+                "The workspace AI key cannot be decrypted. Configure the key again."
+            ) from error
+
+    def _fernet(self) -> Fernet:
+        try:
+            return Fernet(self._encryption_key())
+        except ValueError as error:
+            raise AIConfigurationError(
+                "The configured workspace AI key-encryption value is not a valid Fernet key"
+            ) from error
+
+    async def _enhance_with_model(
+        self, question: str, context: str, fallback: str, configuration: AIModelConfiguration
+    ) -> str:
+        headers = {"Authorization": f"Bearer {configuration.api_key}"}
         payload = {
-            "model": self._settings.ai_model,
+            "model": configuration.model,
             "instructions": (
                 "Answer only from the supplied architecture graph context. "
                 "Never infer or request repository source files. "
@@ -162,7 +261,7 @@ class ArchitectureIntelligenceService:
         }
         async with httpx.AsyncClient(timeout=20) as client:
             response = await client.post(
-                f"{str(self._settings.ai_base_url).rstrip('/')}/responses",
+                f"{configuration.base_url.rstrip('/')}/responses",
                 headers=headers,
                 json=payload,
             )

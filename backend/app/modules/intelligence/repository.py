@@ -5,7 +5,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.intelligence.models import ArchitectureDrift
+from app.modules.intelligence.models import ArchitectureDrift, WorkspaceAIProvider
 
 
 class IntelligenceRepository:
@@ -60,3 +60,47 @@ class IntelligenceRepository:
 
     async def commit(self) -> None:
         await self._session.commit()
+
+    async def get_workspace_ai_provider(self, organization_id: UUID) -> WorkspaceAIProvider | None:
+        return await self._session.scalar(
+            select(WorkspaceAIProvider).where(
+                WorkspaceAIProvider.organization_id == organization_id
+            )
+        )
+
+    async def upsert_workspace_ai_provider(
+        self,
+        organization_id: UUID,
+        configured_by: UUID,
+        encrypted_api_key: str,
+        base_url: str,
+        model_name: str,
+        key_hint: str,
+    ) -> WorkspaceAIProvider:
+        provider = await self.get_workspace_ai_provider(organization_id)
+        if provider is None:
+            provider = WorkspaceAIProvider(
+                organization_id=organization_id,
+                configured_by=configured_by,
+                encrypted_api_key=encrypted_api_key,
+                base_url=base_url,
+                model_name=model_name,
+                key_hint=key_hint,
+            )
+            self._session.add(provider)
+        else:
+            provider.configured_by = configured_by
+            provider.encrypted_api_key = encrypted_api_key
+            provider.base_url = base_url
+            provider.model_name = model_name
+            provider.key_hint = key_hint
+        await self._session.flush()
+        return provider
+
+    async def delete_workspace_ai_provider(self, organization_id: UUID) -> bool:
+        provider = await self.get_workspace_ai_provider(organization_id)
+        if provider is None:
+            return False
+        await self._session.delete(provider)
+        await self._session.flush()
+        return True

@@ -110,6 +110,7 @@ CODEATLAS_GITHUB_OAUTH_REDIRECT_URI=https://<render-api-name>.onrender.com/api/v
 CODEATLAS_AI_BASE_URL=https://api.openai.com/v1
 CODEATLAS_AI_API_KEY=<openai-api-key>
 CODEATLAS_AI_MODEL=gpt-4.1-mini
+CODEATLAS_AI_KEY_ENCRYPTION_KEY=<fernet-key-for-workspace-byok>
 CODEATLAS_LOG_LEVEL=INFO
 ```
 

@@ -370,6 +370,10 @@ Generate pull requests.
 
 Expose architectural operations through MCP.
 
+Implemented scope: local stdio connectivity for Cursor, Claude Desktop, Claude Code, and OpenClaw. The current tool surface is `get_architecture_graph` and `create_implementation_plan`; it supplies graph context rather than raw repository files. See [MCP client setup](../07-mcp/client-setup.md).
+
+The other client names in this product roadmap are future compatibility targets, not current integration guarantees.
+
 Support Codex.
 
 Support Claude Code.

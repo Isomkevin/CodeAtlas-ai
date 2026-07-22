@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 import { useCommandPalette } from "@/components/command-palette";
 import { cn } from "@/lib/utils";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { motion } from "framer-motion";
 
 const nav = [
@@ -23,6 +23,15 @@ const nav = [
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { open } = useCommandPalette();
+  const [hasSession, setHasSession] = useState(false);
+
+  useEffect(() => {
+    setHasSession(Boolean(sessionStorage.getItem("codeatlas.access_token")));
+  }, []);
+
+  if (pathname === "/" && !hasSession) {
+    return <div className="dark min-h-screen bg-background text-foreground">{children}</div>;
+  }
 
   return (
     <div className="dark flex min-h-screen w-full bg-background text-foreground">

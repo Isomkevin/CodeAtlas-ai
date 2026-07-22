@@ -31,7 +31,7 @@ Key capabilities include:
 - Markdown, Mermaid, Draw.io, and C4 architecture artifacts.
 - Graph-grounded AI architecture intelligence and impact analysis.
 - Approval-gated implementation plans and GitHub pull-request workflows.
-- WebSocket scan progress events and MCP integration for AI coding agents.
+- WebSocket scan progress events, encrypted workspace BYOK model configuration, and MCP integration for Cursor, Claude Desktop, Claude Code, and OpenClaw.
 
 ## How we built it
 
@@ -65,7 +65,7 @@ In particular, we are proud of:
 - Live graph-backed documentation and diagram generation.
 - Graph-grounded AI reasoning instead of raw-repository prompting.
 - A secure multi-tenant foundation with GitHub OAuth, JWT, RBAC, webhooks, and background workers.
-- MCP support that lets coding agents work from architecture-aware context.
+- MCP support that lets coding agents work from architecture-aware context without raw source-file exposure.
 - A production-ready local Docker workflow with a usable frontend preview.
 
 ## What we learned

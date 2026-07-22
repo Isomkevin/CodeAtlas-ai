@@ -98,7 +98,7 @@ This repository contains both the platform implementation and the AI-Executable 
 
 CodeAtlas is implemented as a modular FastAPI monolith. The canonical graph is an immutable, versioned Neo4j projection created by the scan worker from PostgreSQL source facts. Python uses the standard AST; JavaScript and TypeScript use deterministic, language-aware symbol and import extraction designed for safe worker execution. Every graph-backed artifact, drift observation, chat response, impact analysis, and implementation plan references a specific graph version.
 
-Implemented modules include tenant JWT/GitHub OAuth/RBAC, encrypted GitHub credentials, signed GitHub push webhooks, private repository scanning, Celery/Redis scan jobs, architecture graph versions and diffs, Markdown/Mermaid/Draw.io/C4 artifacts, graph-only intelligence, WebSocket scan events, approval-gated plans and GitHub PR creation, and an MCP stdio bridge. The existing Repository and Architecture screens use the live API; Architecture consumes scan WebSocket events and refreshes its graph when a projection completes.
+Implemented modules include tenant JWT/GitHub OAuth/RBAC, encrypted GitHub credentials, signed GitHub push webhooks, private repository scanning, Celery/Redis scan jobs, architecture graph versions and diffs, Markdown/Mermaid/Draw.io/C4 artifacts, graph-only intelligence, workspace Bring Your Own Key (BYOK) model configuration, WebSocket scan events, approval-gated plans and GitHub PR creation, and an MCP stdio bridge. The existing Repository and Architecture screens use the live API; Architecture consumes scan WebSocket events and refreshes its graph when a projection completes.
 
 ## Run locally
 
@@ -148,6 +148,12 @@ uv run python -m app.mcp_server
 ```
 
 Every implementation plan is a draft until an owner or administrator approves it. Only then can CodeAtlas open a GitHub pull request from a branch prepared by a coding agent.
+
+### AI coding-agent integration and BYOK
+
+The MCP bridge connects CodeAtlas architecture context to Cursor, Claude Desktop, Claude Code, and OpenClaw. Use the copyable, client-specific setup in [MCP client setup](docs/07-mcp/client-setup.md); the **Agents** screen can also copy a private configuration based on the current session. MCP tokens are short-lived workspace JWTs and must never be committed.
+
+Workspace owners and administrators can configure an OpenAI-compatible API key, base URL, and model from **Settings → AI model provider**. This BYOK configuration is encrypted at rest, its plaintext key is never returned by the API, and it overrides the deployment-wide `CODEATLAS_AI_API_KEY` only for that workspace. If no workspace key is configured, CodeAtlas uses the deployment key when available or continues in deterministic graph-only mode.
 
 ## GitHub push refreshes
 

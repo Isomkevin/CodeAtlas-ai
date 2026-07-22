@@ -1,291 +1,48 @@
-# Model Context Protocol (MCP) Specification
+# CodeAtlas MCP protocol
 
-Version: 1.0
+Status: implemented
 
-Status
+CodeAtlas exposes a standards-compliant JSON-RPC MCP server over **stdio**. It gives coding agents architecture context without exposing a repository checkout or source files.
 
-Canonical
+## Compatibility
 
-Owner
+The stdio server can be registered with MCP-capable clients, including Cursor, Claude Desktop, Claude Code, and OpenClaw. See [client setup](client-setup.md) for copyable configuration examples.
 
-CodeAtlas
+## Security boundary
 
----
+The MCP bridge is a small local process that forwards requests to the tenant-scoped CodeAtlas HTTP API. It requires:
 
-# Overview
+- `CODEATLAS_MCP_API_BASE_URL`, for example `https://api.example.com/api/v1`
+- `CODEATLAS_MCP_TOKEN`, a CodeAtlas JWT for the intended workspace
 
-The Model Context Protocol (MCP) is the primary interface through which AI coding agents interact with CodeAtlas.
+The bridge sends the token only as an API bearer credential. It never reads a local checkout, clones a repository, or exposes raw source files to an agent. The API still enforces the caller's workspace and repository authorization.
 
-Rather than exposing repositories directly to AI assistants, CodeAtlas exposes architectural knowledge.
+Treat the MCP token as a secret. Store it in the agent's local configuration or secret store; never commit it to `.cursor/mcp.json`, `.mcp.json`, or another shared configuration file.
 
-Every supported AI coding agent connects to the CodeAtlas MCP Server.
+## Implemented tools
 
-The MCP Server provides:
+| Tool | Purpose | Guardrail |
+| --- | --- | --- |
+| `get_architecture_graph` | Reads the canonical architecture graph for one connected repository. | Requires repository access and returns only graph data. |
+| `create_implementation_plan` | Creates a graph-bound implementation plan from a change request. | The plan remains a draft until an owner or admin approves it before PR creation. |
 
-- Architecture Context
-- Documentation
-- Repository Intelligence
-- Architecture Validation
-- Code Generation Planning
-- Diagram Generation
-- Knowledge Graph Queries
-- Drift Detection
-- Implementation Workflows
+Each tool requires `repository_id`. `create_implementation_plan` also requires `change_request` and accepts an optional `graph_version_id`.
 
-This allows AI agents to reason from architecture instead of raw source code.
+## Transport lifecycle
 
----
+1. The agent launches `python -m app.mcp_server` as a local stdio process.
+2. The client sends `initialize`, `tools/list`, and `tools/call` JSON-RPC messages.
+3. The bridge forwards allowed tool calls to the CodeAtlas API using the tenant-scoped JWT.
+4. The API checks workspace and repository access before returning graph data or creating a plan.
 
-# Design Principles
+The server implements `initialize`, `notifications/initialized`, `ping`, `tools/list`, and `tools/call`.
 
-Architecture First
+## Verification
 
-The Architecture Graph is always consulted before repository analysis.
+Run the MCP protocol test from the repository root:
 
-Structured Context
+```powershell
+uv run pytest backend/tests/test_mcp_server.py
+```
 
-AI receives structured knowledge rather than entire repositories.
-
-Deterministic Tools
-
-Every tool returns structured JSON.
-
-Stateless Requests
-
-Each request is independent.
-
-Security
-
-Repositories never leave the customer's infrastructure.
-
-Streaming
-
-Long-running tasks stream progress.
-
-Observability
-
-Every MCP request is logged.
-
----
-
-# Supported Clients
-
-OpenAI Codex
-
-Claude Code
-
-Cursor
-
-Gemini CLI
-
-Windsurf
-
-Continue.dev
-
-VS Code
-
-JetBrains
-
-OpenAI Agents SDK
-
-Future Support
-
-Custom Enterprise Agents
-
----
-
-# Resources
-
-Architecture Graph
-
-Repository Metadata
-
-Repository Tree
-
-Documentation
-
-Architecture Decisions
-
-Architecture Health
-
-Diagrams
-
-Knowledge Graph
-
-Implementation Plans
-
-Pull Requests
-
-Repository History
-
-Architecture Timeline
-
----
-
-# Tool Categories
-
-Repository Tools
-
-Architecture Tools
-
-Knowledge Graph Tools
-
-Documentation Tools
-
-Diagram Tools
-
-Implementation Tools
-
-Validation Tools
-
-Search Tools
-
-Planning Tools
-
-Infrastructure Tools
-
-GitHub Tools
-
-Administration Tools
-
----
-
-# Request Lifecycle
-
-AI Agent
-
-↓
-
-MCP Server
-
-↓
-
-Authentication
-
-↓
-
-Authorization
-
-↓
-
-Context Builder
-
-↓
-
-Tool Execution
-
-↓
-
-Graph Update
-
-↓
-
-Streaming Response
-
-↓
-
-Audit Log
-
----
-
-# Context Construction
-
-Every request automatically includes
-
-Repository
-
-Architecture Graph
-
-Architecture Decisions
-
-Current Branch
-
-Current Commit
-
-User Permissions
-
-Relevant Documentation
-
-Relevant Services
-
-Relevant APIs
-
-Relevant Dependencies
-
-This eliminates unnecessary prompt engineering.
-
----
-
-# Response Format
-
-Every response includes
-
-Status
-
-Confidence
-
-Execution Time
-
-Affected Nodes
-
-Affected Services
-
-Suggested Next Actions
-
-Warnings
-
-References
-
----
-
-# Security
-
-OAuth2
-
-JWT
-
-Role-Based Access Control
-
-Repository Isolation
-
-Audit Logging
-
-Approval Workflows
-
-Encrypted Storage
-
-Secrets Management
-
----
-
-# Extensibility
-
-Organizations may register custom MCP tools.
-
-Example
-
-Security Scanner
-
-Cloud Cost Analyzer
-
-Internal Architecture Validator
-
-Compliance Checker
-
-Performance Analyzer
-
----
-
-# Future
-
-Distributed MCP Clusters
-
-Federated Architecture Graphs
-
-Cross Organization Architecture
-
-Multi Repository Queries
-
-Real Time Collaboration
-
-Persistent Agent Sessions
+To manually verify a configured client, ask it to list CodeAtlas tools, then request the architecture graph for a repository you are authorized to access.

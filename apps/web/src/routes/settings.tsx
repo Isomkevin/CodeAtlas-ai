@@ -2,7 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { PageHeader } from "@/components/app-shell";
 import { Card, SectionTitle } from "@/components/atlas-ui";
 import { Switch } from "@/components/ui/switch";
-import { GitBranch, Slack, KeyRound, Users, Bell, CreditCard } from "lucide-react";
+import { getWorkspaceAIProvider, removeWorkspaceAIProvider, saveWorkspaceAIProvider, type WorkspaceAIProvider } from "@/lib/api";
+import { GitBranch, Slack, KeyRound, Users, Bell, CreditCard, LoaderCircle, ShieldCheck, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 
 const apiBaseUrl = import.meta.env.VITE_CODEATLAS_API_URL ?? "http://localhost:8000";
@@ -26,9 +27,27 @@ function SettingsPage() {
   const [githubError, setGithubError] = useState<string | null>(null);
   const [demoAvailable, setDemoAvailable] = useState(false);
   const [demoSigningIn, setDemoSigningIn] = useState(false);
+  const [aiProvider, setAiProvider] = useState<WorkspaceAIProvider | null>(null);
+  const [aiKey, setAiKey] = useState("");
+  const [aiBaseUrl, setAiBaseUrl] = useState("https://api.openai.com/v1");
+  const [aiModel, setAiModel] = useState("gpt-4.1-mini");
+  const [aiSaving, setAiSaving] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+
+  const loadAIProvider = async () => {
+    try {
+      const provider = await getWorkspaceAIProvider();
+      setAiProvider(provider);
+      if (provider.base_url) setAiBaseUrl(provider.base_url);
+      if (provider.model) setAiModel(provider.model);
+    } catch {
+      setAiProvider(null);
+    }
+  };
 
   useEffect(() => {
     setGithubConnected(Boolean(sessionStorage.getItem("codeatlas.access_token")));
+    void loadAIProvider();
     const receiveSession = (event: MessageEvent<unknown>) => {
       if (event.origin !== new URL(apiBaseUrl).origin || typeof event.data !== "object" || event.data === null) return;
       const message = event.data as { type?: string; accessToken?: string };
@@ -36,6 +55,7 @@ function SettingsPage() {
         sessionStorage.setItem("codeatlas.access_token", message.accessToken);
         setGithubConnected(true);
         setGithubError(null);
+        void loadAIProvider();
       }
     };
     window.addEventListener("message", receiveSession);
@@ -77,6 +97,40 @@ function SettingsPage() {
       setGithubError(error instanceof Error ? error.message : "Unable to create local demo session.");
     } finally {
       setDemoSigningIn(false);
+    }
+  };
+
+  const saveAIProvider = async () => {
+    if (!aiKey.trim()) {
+      setAiError("Enter an API key to save a workspace provider.");
+      return;
+    }
+    setAiSaving(true);
+    setAiError(null);
+    try {
+      const provider = await saveWorkspaceAIProvider({
+        api_key: aiKey,
+        base_url: aiBaseUrl,
+        model: aiModel,
+      });
+      setAiProvider(provider);
+      setAiKey("");
+    } catch (error) {
+      setAiError(error instanceof Error ? error.message : "Unable to save the workspace provider.");
+    } finally {
+      setAiSaving(false);
+    }
+  };
+
+  const clearAIProvider = async () => {
+    setAiSaving(true);
+    setAiError(null);
+    try {
+      setAiProvider(await removeWorkspaceAIProvider());
+    } catch (error) {
+      setAiError(error instanceof Error ? error.message : "Unable to remove the workspace provider.");
+    } finally {
+      setAiSaving(false);
     }
   };
 
@@ -138,6 +192,18 @@ function SettingsPage() {
             </div>
             {githubError && <p className="mt-3 text-xs text-danger">{githubError}</p>}
             {demoAvailable && !githubConnected && <button onClick={() => { void createDevelopmentSession(); }} disabled={demoSigningIn} className="mt-3 rounded-lg border border-primary/40 bg-primary/10 px-3 py-2 text-xs font-medium text-primary disabled:opacity-50">{demoSigningIn ? "Creating demo session…" : "Use local demo session"}</button>}
+          </Card>
+
+          <Card className="p-5">
+            <SectionTitle right={<span className={`inline-flex items-center gap-1 text-[11px] ${aiProvider?.source === "workspace_byok" ? "text-success" : "text-muted-foreground"}`}><ShieldCheck className="h-3.5 w-3.5" />{aiProvider?.source === "workspace_byok" ? "Workspace BYOK" : aiProvider?.source === "deployment_key" ? "Deployment key" : "Graph-only"}</span>}>AI model provider</SectionTitle>
+            <p className="mb-4 text-xs leading-relaxed text-muted-foreground">Use your workspace’s OpenAI-compatible key instead of the deployment key. CodeAtlas encrypts it at rest, never returns it to the browser, and uses it only with architecture-graph context.</p>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <label className="block md:col-span-2"><div className="mb-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">API key</div><input value={aiKey} onChange={(event) => setAiKey(event.target.value)} type="password" autoComplete="off" placeholder={aiProvider?.key_hint ? `Configured (${aiProvider.key_hint}); enter a new key to rotate` : "sk-..."} className="w-full rounded-lg border border-border bg-panel/60 px-3 py-2 text-sm outline-none focus:border-primary/60" /></label>
+              <label className="block"><div className="mb-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Base URL</div><input value={aiBaseUrl} onChange={(event) => setAiBaseUrl(event.target.value)} inputMode="url" className="w-full rounded-lg border border-border bg-panel/60 px-3 py-2 text-sm outline-none focus:border-primary/60" /></label>
+              <label className="block"><div className="mb-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Model</div><input value={aiModel} onChange={(event) => setAiModel(event.target.value)} placeholder="gpt-4.1-mini" className="w-full rounded-lg border border-border bg-panel/60 px-3 py-2 text-sm outline-none focus:border-primary/60" /></label>
+            </div>
+            <div className="mt-4 flex flex-wrap items-center gap-2"><button onClick={() => { void saveAIProvider(); }} disabled={aiSaving || !githubConnected} className="inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-xs font-medium text-primary-foreground disabled:opacity-50"><Sparkles className="h-3.5 w-3.5" />{aiSaving ? "Saving…" : "Save workspace key"}</button>{aiProvider?.source === "workspace_byok" && <button onClick={() => { void clearAIProvider(); }} disabled={aiSaving} className="rounded-lg border border-border px-3 py-2 text-xs font-medium text-muted-foreground hover:text-foreground disabled:opacity-50">Use deployment key instead</button>} {!githubConnected && <span className="text-xs text-muted-foreground">Sign in as an owner or admin to configure BYOK.</span>} {aiSaving && <LoaderCircle className="h-4 w-4 animate-spin text-primary" />}</div>
+            {aiError && <p className="mt-3 text-xs text-danger">{aiError}</p>}
           </Card>
 
           <Card className="p-5">

@@ -67,6 +67,16 @@ export type RepositoryEvent = {
   message?: string;
 };
 
+export type WorkspaceAIProvider = {
+  configured: boolean;
+  source: "workspace_byok" | "deployment_key" | "deterministic_graph";
+  provider: string | null;
+  base_url: string | null;
+  model: string | null;
+  key_hint: string | null;
+  updated_at: string | null;
+};
+
 export const apiBaseUrl = import.meta.env.VITE_CODEATLAS_API_URL ?? "http://localhost:8000";
 
 export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -153,4 +163,23 @@ export function createImplementationPlan(repositoryId: string, changeRequest: st
     method: "POST",
     body: JSON.stringify({ change_request: changeRequest }),
   });
+}
+
+export function getWorkspaceAIProvider() {
+  return apiRequest<WorkspaceAIProvider>("/ai/provider");
+}
+
+export function saveWorkspaceAIProvider(input: {
+  api_key: string;
+  base_url: string;
+  model: string;
+}) {
+  return apiRequest<WorkspaceAIProvider>("/ai/provider", {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
+export function removeWorkspaceAIProvider() {
+  return apiRequest<WorkspaceAIProvider>("/ai/provider", { method: "DELETE" });
 }

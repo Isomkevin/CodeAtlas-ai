@@ -2,6 +2,8 @@
 
 Status: complete. The Architecture Graph is the product source of truth; parsers write source facts first, graph projection produces architecture facts, and AI and generated artifacts consume only the architecture graph.
 
+The delivered product also includes a public landing page, workspace-scoped encrypted BYOK configuration for OpenAI-compatible models, and documented local stdio MCP setup for Cursor, Claude Desktop, Claude Code, and OpenClaw.
+
 ## Dependency map
 
 `apps/web` (canonical UI) depends on the versioned HTTP/WebSocket API. API controllers depend on module public services. Services coordinate SQL operational records, graph repositories, event publication, and workers. Parser workers create source-graph facts; the architecture module projects and versions the canonical graph. Documentation, diagrams, AI, drift, implementation, GitHub, and MCP depend on that graph in that order.
@@ -22,6 +24,8 @@ Status: complete. The Architecture Graph is the product source of truth; parsers
 Each work package must add its API contract, validation, structured logging, metrics, tests, and module documentation. A package is only complete after formatting/linting and its relevant test suite pass; it is then committed before the next package begins. Frontend changes are limited to replacing mock data and wiring existing interactions to API/WebSocket contracts.
 
 ## Delivery status
+
+Workspace owners and administrators can configure an encrypted API key, base URL, and model in Settings. The workspace key overrides the deployment key only for architecture-graph chat; removing it returns the workspace to deployment-key or deterministic graph-only behavior.
 
 Repository ingestion now supports authenticated GitHub clones, Python AST parsing, and JavaScript/TypeScript Tree-sitter AST parsing. Scans persist source facts, produce immutable Neo4j graph versions, and publish progress through Redis.
 

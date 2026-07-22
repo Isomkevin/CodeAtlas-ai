@@ -22,11 +22,11 @@ Supporting proprietary integrations for every IDE would create unnecessary maint
 
 # Decision
 
-All AI interactions will be exposed through MCP.
+CodeAtlas exposes a deliberately narrow architecture-intelligence interface through MCP over local stdio. The implemented bridge provides `get_architecture_graph` and `create_implementation_plan`, with a tenant-scoped API token and the same repository authorization as the HTTP API.
 
-The MCP server becomes the primary external interface.
+The first supported configuration targets are Cursor, Claude Desktop, Claude Code, and OpenClaw. The bridge does not expose a checkout, raw source, shell, or unrestricted GitHub access.
 
-REST APIs remain available for frontend and integrations.
+REST remains the primary application interface. Additional MCP tools are added only when their API authorization, data boundary, approval path, and tests are in place.
 
 ---
 
@@ -36,17 +36,13 @@ Vendor neutral.
 
 Future proof.
 
-Supports Codex.
-
 Supports Cursor.
 
-Supports Claude Code.
+Supports Claude Desktop and Claude Code.
 
-Supports Gemini CLI.
+Supports OpenClaw.
 
-Supports OpenAI Agents.
-
-Supports enterprise AI systems.
+Provides a vendor-neutral integration path for future MCP clients.
 
 ---
 
@@ -62,4 +58,4 @@ Need strict permission controls.
 
 # Result
 
-Every AI coding assistant can consume architectural intelligence without platform-specific integrations.
+MCP-capable clients can consume an authorized workspace's architecture graph and create approval-gated plans without platform-specific integrations or repository source exposure.

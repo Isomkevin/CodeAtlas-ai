@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     ai_base_url: AnyHttpUrl = "https://api.openai.com/v1"
     ai_api_key: SecretStr | None = None
     ai_model: str = "gpt-4.1-mini"
+    ai_key_encryption_key: SecretStr | None = None
     otel_service_name: str = "codeatlas-api"
     log_level: str = Field(default="INFO", pattern="^(DEBUG|INFO|WARNING|ERROR|CRITICAL)$")
 
