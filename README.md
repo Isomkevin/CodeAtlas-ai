@@ -14,6 +14,12 @@ Developers should never manually maintain diagrams, documentation, or architectu
 
 CodeAtlas becomes the source of truth for software architecture.
 
+## Hackathon elevator pitch
+
+> CodeAtlas turns GitHub repositories into living architecture graphs, diagrams, documentation, and AI-guided implementation plans—so teams can understand and evolve software safely.
+
+Read the complete [OpenAI Build Week Challenge project narrative](docs/00-overview/hackathon-submission.md), including the problem, implementation, challenges, learnings, and roadmap.
+
 ## Core Capabilities
 
 - Repository Analysis
@@ -90,7 +96,7 @@ This repository contains both the platform implementation and the AI-Executable 
 
 ## Current implementation
 
-CodeAtlas is implemented as a modular FastAPI monolith. The canonical graph is an immutable, versioned Neo4j projection created by the scan worker from PostgreSQL source facts. Python uses the standard AST; JavaScript and TypeScript use Tree-sitter AST adapters. Every graph-backed artifact, drift observation, chat response, impact analysis, and implementation plan references a specific graph version.
+CodeAtlas is implemented as a modular FastAPI monolith. The canonical graph is an immutable, versioned Neo4j projection created by the scan worker from PostgreSQL source facts. Python uses the standard AST; JavaScript and TypeScript use deterministic, language-aware symbol and import extraction designed for safe worker execution. Every graph-backed artifact, drift observation, chat response, impact analysis, and implementation plan references a specific graph version.
 
 Implemented modules include tenant JWT/GitHub OAuth/RBAC, encrypted GitHub credentials, signed GitHub push webhooks, private repository scanning, Celery/Redis scan jobs, architecture graph versions and diffs, Markdown/Mermaid/Draw.io/C4 artifacts, graph-only intelligence, WebSocket scan events, approval-gated plans and GitHub PR creation, and an MCP stdio bridge. The existing Repository and Architecture screens use the live API; Architecture consumes scan WebSocket events and refreshes its graph when a projection completes.
 

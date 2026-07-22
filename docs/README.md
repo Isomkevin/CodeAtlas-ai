@@ -3,6 +3,7 @@
 The product specification and implementation records live here. The Architecture Graph is the product source of truth; documentation and diagrams are derived artifacts.
 
 - [Vision](00-overview/vision.md)
+- [OpenAI Build Week Challenge submission](00-overview/hackathon-submission.md)
 - [Product requirements](01-prd/prd.md)
 - [Architecture Graph](03-domain-model/architecture-graph.md)
 - [PostgreSQL schema](03-engineering/database/postgresql-schema.md)
