@@ -6,24 +6,14 @@ import { Activity, GitPullRequest, FileText, Sparkles, Server, Play, ArrowRight,
 import { useEffect, useMemo, useState } from "react";
 
 export const Route = createFileRoute("/")({
-  head: () => ({ meta: [{ title: "Dashboard · CodeAtlas" }] }),
-  component: Home,
+  head: () => ({ meta: [{ title: "CodeAtlas · Architecture intelligence" }] }),
+  component: LandingPage,
 });
 
 type RepositorySnapshot = { repository: ApiRepository; graph: ArchitectureGraph | null; versions: GraphVersion[]; artifacts: ArchitectureArtifact[]; plans: ImplementationPlan[] };
 type ActivityEvent = { id: string; at: string; title: string; detail: string };
 const timestamp = (value: string) => new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
 const visualTrend = (values: number[]) => values.length > 1 ? values : [0, 0];
-
-function Home() {
-  const [hasSession, setHasSession] = useState(false);
-
-  useEffect(() => {
-    setHasSession(Boolean(sessionStorage.getItem("codeatlas.access_token")));
-  }, []);
-
-  return hasSession ? <Dashboard /> : <LandingPage />;
-}
 
 function LandingPage() {
   const capabilities = [
@@ -35,7 +25,7 @@ function LandingPage() {
   return <div className="min-h-screen overflow-hidden bg-background">
     <header className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5 md:px-8">
       <Link to="/" className="flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-accent"><LayersMark /></span><span><span className="block text-base font-semibold tracking-tight">CodeAtlas</span><span className="block text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">Architecture intelligence</span></span></Link>
-      <div className="flex items-center gap-2"><Link to="/agents" className="hidden rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground sm:inline-flex">MCP for agents</Link><Link to="/settings" className="inline-flex items-center gap-2 rounded-lg bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground hover:opacity-90">Open workspace <ArrowRight className="h-4 w-4" /></Link></div>
+      <div className="flex items-center gap-2"><Link to="/agents" className="hidden rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground sm:inline-flex">MCP for agents</Link><Link to="/dashboard" className="inline-flex items-center gap-2 rounded-lg bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground hover:opacity-90">Open dashboard <ArrowRight className="h-4 w-4" /></Link></div>
     </header>
 
     <main>
@@ -75,7 +65,7 @@ function Feature({ icon: Icon, title, detail }: { icon: typeof BookOpen; title: 
   return <div className="rounded-xl border border-border/70 bg-panel/40 p-4"><Icon className="h-4 w-4 text-primary" /><h3 className="mt-3 text-sm font-medium">{title}</h3><p className="mt-1.5 text-xs leading-5 text-muted-foreground">{detail}</p></div>;
 }
 
-function Dashboard() {
+export function Dashboard() {
   const [snapshots, setSnapshots] = useState<RepositorySnapshot[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);

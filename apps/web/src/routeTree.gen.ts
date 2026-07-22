@@ -15,6 +15,7 @@ import { Route as KnowledgeRouteImport } from './routes/knowledge'
 import { Route as ImplementationRouteImport } from './routes/implementation'
 import { Route as HistoryRouteImport } from './routes/history'
 import { Route as DocumentationRouteImport } from './routes/documentation'
+import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as ArchitectureRouteImport } from './routes/architecture'
 import { Route as AgentsRouteImport } from './routes/agents'
 import { Route as IndexRouteImport } from './routes/index'
@@ -49,6 +50,11 @@ const DocumentationRoute = DocumentationRouteImport.update({
   path: '/documentation',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DashboardRoute = DashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ArchitectureRoute = ArchitectureRouteImport.update({
   id: '/architecture',
   path: '/architecture',
@@ -69,6 +75,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/agents': typeof AgentsRoute
   '/architecture': typeof ArchitectureRoute
+  '/dashboard': typeof DashboardRoute
   '/documentation': typeof DocumentationRoute
   '/history': typeof HistoryRoute
   '/implementation': typeof ImplementationRoute
@@ -80,6 +87,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/agents': typeof AgentsRoute
   '/architecture': typeof ArchitectureRoute
+  '/dashboard': typeof DashboardRoute
   '/documentation': typeof DocumentationRoute
   '/history': typeof HistoryRoute
   '/implementation': typeof ImplementationRoute
@@ -92,6 +100,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/agents': typeof AgentsRoute
   '/architecture': typeof ArchitectureRoute
+  '/dashboard': typeof DashboardRoute
   '/documentation': typeof DocumentationRoute
   '/history': typeof HistoryRoute
   '/implementation': typeof ImplementationRoute
@@ -105,6 +114,7 @@ export interface FileRouteTypes {
     | '/'
     | '/agents'
     | '/architecture'
+    | '/dashboard'
     | '/documentation'
     | '/history'
     | '/implementation'
@@ -116,6 +126,7 @@ export interface FileRouteTypes {
     | '/'
     | '/agents'
     | '/architecture'
+    | '/dashboard'
     | '/documentation'
     | '/history'
     | '/implementation'
@@ -127,6 +138,7 @@ export interface FileRouteTypes {
     | '/'
     | '/agents'
     | '/architecture'
+    | '/dashboard'
     | '/documentation'
     | '/history'
     | '/implementation'
@@ -139,6 +151,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AgentsRoute: typeof AgentsRoute
   ArchitectureRoute: typeof ArchitectureRoute
+  DashboardRoute: typeof DashboardRoute
   DocumentationRoute: typeof DocumentationRoute
   HistoryRoute: typeof HistoryRoute
   ImplementationRoute: typeof ImplementationRoute
@@ -191,6 +204,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DocumentationRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/dashboard': {
+      id: '/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof DashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/architecture': {
       id: '/architecture'
       path: '/architecture'
@@ -219,6 +239,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AgentsRoute: AgentsRoute,
   ArchitectureRoute: ArchitectureRoute,
+  DashboardRoute: DashboardRoute,
   DocumentationRoute: DocumentationRoute,
   HistoryRoute: HistoryRoute,
   ImplementationRoute: ImplementationRoute,

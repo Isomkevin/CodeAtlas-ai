@@ -5,11 +5,11 @@ import {
 } from "lucide-react";
 import { useCommandPalette } from "@/components/command-palette";
 import { cn } from "@/lib/utils";
-import { useEffect, useState, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { motion } from "framer-motion";
 
 const nav = [
-  { to: "/",               label: "Dashboard",       icon: LayoutDashboard },
+  { to: "/dashboard",      label: "Dashboard",       icon: LayoutDashboard },
   { to: "/repositories",   label: "Repositories",    icon: GitBranch },
   { to: "/architecture",   label: "Architecture",    icon: Network },
   { to: "/knowledge",      label: "Knowledge Graph", icon: Waypoints },
@@ -23,13 +23,7 @@ const nav = [
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { open } = useCommandPalette();
-  const [hasSession, setHasSession] = useState(false);
-
-  useEffect(() => {
-    setHasSession(Boolean(sessionStorage.getItem("codeatlas.access_token")));
-  }, []);
-
-  if (pathname === "/" && !hasSession) {
+  if (pathname === "/") {
     return <div className="dark min-h-screen bg-background text-foreground">{children}</div>;
   }
 
@@ -64,7 +58,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className="px-2 pb-1.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">Workspace</div>
           <ul className="space-y-0.5">
             {nav.map((item) => {
-              const active = item.to === "/" ? pathname === "/" : pathname.startsWith(item.to);
+              const active = pathname.startsWith(item.to);
               const Icon = item.icon;
               return (
                 <li key={item.to}>
