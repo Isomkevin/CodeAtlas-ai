@@ -12,8 +12,9 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { toast } from "sonner";
-import { Compass, Network, BookOpen, Terminal, Check, Copy, Plus, Trash2, KeyRound, AlertTriangle, BookOpenText, ExternalLink } from "lucide-react";
+import { Compass, Network, BookOpen, Terminal, Check, Copy, Plus, Trash2, KeyRound, AlertTriangle, BookOpenText, ExternalLink, Cloud } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 export const Route = createFileRoute("/agents")({
@@ -26,77 +27,161 @@ type Agent = { id: string; name: string; icon: typeof Compass; completed: number
 const TOKEN_PLACEHOLDER = "<PASTE-cak-TOKEN-HERE>";
 const CHECKOUT_PLACEHOLDER = "/absolute/path/to/CodeAtlas-ai";
 
+type Snippet = { language: "json" | "shell"; body: string };
+
 type ClientRecipe = {
   label: string;
-  configPath: string;
-  intro: string;
-  snippet: (apiBase: string) => string;
-  language: "json" | "shell";
-  verify: string;
+  http: {
+    configPath: string;
+    intro: string;
+    snippet: (apiBase: string) => Snippet;
+    verify: string;
+  };
+  stdio: {
+    configPath: string;
+    intro: string;
+    snippet: (apiBase: string) => Snippet;
+    verify: string;
+  };
   docsUrl: string;
 };
+
+const httpEndpoint = (apiBase: string) => `${apiBase}/mcp`;
 
 const clientRecipes: Record<string, ClientRecipe> = {
   cursor: {
     label: "Cursor",
-    configPath: "~/.cursor/mcp.json  (user)   —or—   .cursor/mcp.json  (project, do not commit)",
-    intro: "Cursor discovers stdio MCP servers via a JSON config file. Add CodeAtlas under `mcpServers`, then restart Cursor.",
-    language: "json",
-    snippet: (apiBase) => JSON.stringify({
-      mcpServers: {
-        codeatlas: {
-          command: "uv",
-          args: ["--directory", CHECKOUT_PLACEHOLDER, "run", "python", "-m", "app.mcp_server"],
-          env: {
-            CODEATLAS_MCP_API_BASE_URL: apiBase,
-            CODEATLAS_MCP_TOKEN: TOKEN_PLACEHOLDER,
-          },
-        },
-      },
-    }, null, 2),
-    verify: "Restart Cursor. In the AI chat, ask 'list your MCP tools' — you should see get_architecture_graph and create_implementation_plan.",
     docsUrl: "https://docs.cursor.com/context/model-context-protocol",
+    http: {
+      configPath: "~/.cursor/mcp.json  (user)   —or—   .cursor/mcp.json  (project, do not commit the token)",
+      intro: "No install required. Point Cursor at the hosted MCP endpoint and pass your PAT as an Authorization header.",
+      snippet: (apiBase) => ({
+        language: "json",
+        body: JSON.stringify({
+          mcpServers: {
+            codeatlas: {
+              url: httpEndpoint(apiBase),
+              headers: { Authorization: `Bearer ${TOKEN_PLACEHOLDER}` },
+            },
+          },
+        }, null, 2),
+      }),
+      verify: "Restart Cursor. Ask the AI chat 'list your MCP tools' — you should see get_architecture_graph and create_implementation_plan.",
+    },
+    stdio: {
+      configPath: "~/.cursor/mcp.json  (user)   —or—   .cursor/mcp.json  (project, do not commit)",
+      intro: "Use this if you're running CodeAtlas locally against localhost, or need offline access without the hosted backend.",
+      snippet: (apiBase) => ({
+        language: "json",
+        body: JSON.stringify({
+          mcpServers: {
+            codeatlas: {
+              command: "uv",
+              args: ["--directory", CHECKOUT_PLACEHOLDER, "run", "python", "-m", "app.mcp_server"],
+              env: {
+                CODEATLAS_MCP_API_BASE_URL: apiBase,
+                CODEATLAS_MCP_TOKEN: TOKEN_PLACEHOLDER,
+              },
+            },
+          },
+        }, null, 2),
+      }),
+      verify: "Restart Cursor. Same verify step — tools appear in the AI chat.",
+    },
   },
   "claude-desktop": {
     label: "Claude Desktop",
-    configPath: "macOS: ~/Library/Application Support/Claude/claude_desktop_config.json  ·  Windows: %APPDATA%\\Claude\\claude_desktop_config.json",
-    intro: "Claude Desktop needs an absolute path via `--directory` because it doesn't inherit a working directory.",
-    language: "json",
-    snippet: (apiBase) => JSON.stringify({
-      mcpServers: {
-        codeatlas: {
-          command: "uv",
-          args: ["--directory", CHECKOUT_PLACEHOLDER, "run", "python", "-m", "app.mcp_server"],
-          env: {
-            CODEATLAS_MCP_API_BASE_URL: apiBase,
-            CODEATLAS_MCP_TOKEN: TOKEN_PLACEHOLDER,
-          },
-        },
-      },
-    }, null, 2),
-    verify: "Restart Claude Desktop. Click the hammer/tools icon — CodeAtlas' two tools should be listed.",
     docsUrl: "https://support.claude.com/en/articles/10949351-getting-started-with-local-mcp-servers-on-claude-desktop",
+    http: {
+      configPath: "macOS: ~/Library/Application Support/Claude/claude_desktop_config.json  ·  Windows: %APPDATA%\\Claude\\claude_desktop_config.json",
+      intro: "Requires Claude Desktop 0.7+ (Streamable HTTP transport support).",
+      snippet: (apiBase) => ({
+        language: "json",
+        body: JSON.stringify({
+          mcpServers: {
+            codeatlas: {
+              url: httpEndpoint(apiBase),
+              headers: { Authorization: `Bearer ${TOKEN_PLACEHOLDER}` },
+            },
+          },
+        }, null, 2),
+      }),
+      verify: "Restart Claude Desktop. Click the hammer/tools icon — CodeAtlas' two tools should be listed.",
+    },
+    stdio: {
+      configPath: "macOS: ~/Library/Application Support/Claude/claude_desktop_config.json  ·  Windows: %APPDATA%\\Claude\\claude_desktop_config.json",
+      intro: "Use this if you're on an older Claude Desktop that only supports stdio, or you're running CodeAtlas locally.",
+      snippet: (apiBase) => ({
+        language: "json",
+        body: JSON.stringify({
+          mcpServers: {
+            codeatlas: {
+              command: "uv",
+              args: ["--directory", CHECKOUT_PLACEHOLDER, "run", "python", "-m", "app.mcp_server"],
+              env: {
+                CODEATLAS_MCP_API_BASE_URL: apiBase,
+                CODEATLAS_MCP_TOKEN: TOKEN_PLACEHOLDER,
+              },
+            },
+          },
+        }, null, 2),
+      }),
+      verify: "Restart Claude Desktop. Same verify step.",
+    },
   },
   "claude-code": {
     label: "Claude Code",
-    configPath: "Registered via CLI; the entry lands in ~/.claude.json (user scope).",
-    intro: "Register the bridge in one command. Prefer --scope user so the token never lands in a project's .mcp.json.",
-    language: "shell",
-    snippet: (apiBase) => `claude mcp add codeatlas \\
+    docsUrl: "https://code.claude.com/docs/en/mcp",
+    http: {
+      configPath: "Registered via CLI; the entry lands in ~/.claude.json (user scope).",
+      intro: "One command — no Python, no clone. Prefer --scope user so the token doesn't leak via a project .mcp.json.",
+      snippet: (apiBase) => ({
+        language: "shell",
+        body: `claude mcp add codeatlas \\
+  --scope user \\
+  --transport http \\
+  --header "Authorization: Bearer ${TOKEN_PLACEHOLDER}" \\
+  ${httpEndpoint(apiBase)}`,
+      }),
+      verify: "Run `claude mcp list` — codeatlas should show ✓ Connected. Inside a claude session, `/mcp` shows the tools inventory.",
+    },
+    stdio: {
+      configPath: "Registered via CLI; the entry lands in ~/.claude.json (user scope).",
+      intro: "Use for local development against localhost, or when you need to run the bridge from a checkout.",
+      snippet: (apiBase) => ({
+        language: "shell",
+        body: `claude mcp add codeatlas \\
   --scope user \\
   --transport stdio \\
   --env CODEATLAS_MCP_API_BASE_URL=${apiBase} \\
   --env CODEATLAS_MCP_TOKEN=${TOKEN_PLACEHOLDER} \\
   -- uv --directory ${CHECKOUT_PLACEHOLDER} run python -m app.mcp_server`,
-    verify: "Run `claude mcp list` — codeatlas should show ✓ Connected. Inside a claude session, `/mcp` shows the tools inventory.",
-    docsUrl: "https://code.claude.com/docs/en/mcp",
+      }),
+      verify: "`claude mcp list` should show ✓ Connected. Same tools inventory via `/mcp`.",
+    },
   },
   openclaw: {
     label: "OpenClaw",
-    configPath: "Registered via the openclaw CLI.",
-    intro: "OpenClaw exposes an `mcp add` command plus a `doctor --probe` that spawns the bridge and enumerates tools.",
-    language: "shell",
-    snippet: (apiBase) => `openclaw mcp add codeatlas \\
+    docsUrl: "https://docs.openclaw.ai/cli/mcp",
+    http: {
+      configPath: "Registered via the openclaw CLI.",
+      intro: "Remote HTTP registration. No local Python or checkout needed.",
+      snippet: (apiBase) => ({
+        language: "shell",
+        body: `openclaw mcp add codeatlas \\
+  --url ${httpEndpoint(apiBase)} \\
+  --header "Authorization: Bearer ${TOKEN_PLACEHOLDER}"
+
+openclaw mcp doctor codeatlas --probe`,
+      }),
+      verify: "The `doctor --probe` command should print both tool names.",
+    },
+    stdio: {
+      configPath: "Registered via the openclaw CLI.",
+      intro: "Local stdio registration for offline development.",
+      snippet: (apiBase) => ({
+        language: "shell",
+        body: `openclaw mcp add codeatlas \\
   --command uv \\
   --arg --directory --arg ${CHECKOUT_PLACEHOLDER} \\
   --arg run --arg python --arg -m --arg app.mcp_server \\
@@ -104,8 +189,9 @@ const clientRecipes: Record<string, ClientRecipe> = {
   --env CODEATLAS_MCP_TOKEN=${TOKEN_PLACEHOLDER}
 
 openclaw mcp doctor codeatlas --probe`,
-    verify: "The `doctor --probe` command should print both tool names. If it fails, re-check the checkout path.",
-    docsUrl: "https://docs.openclaw.ai/cli/mcp",
+      }),
+      verify: "`doctor --probe` prints both tool names.",
+    },
   },
 };
 
@@ -118,6 +204,40 @@ function SetupInstructionsCard({ apiBase }: { apiBase: string }) {
       toast.error("Clipboard blocked — copy manually");
     }
   };
+  const renderStage = (stage: { configPath: string; intro: string; snippet: (apiBase: string) => Snippet; verify: string }, label: string) => {
+    const snippet = stage.snippet(apiBase);
+    return (
+      <div className="space-y-3">
+        <div>
+          <div className="mb-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Config location</div>
+          <div className="rounded-md border border-border/60 bg-background/40 px-3 py-2 font-mono text-[11px] text-muted-foreground">{stage.configPath}</div>
+        </div>
+        <p className="text-sm text-muted-foreground">{stage.intro}</p>
+        <div className="relative">
+          <div className="mb-1 flex items-center justify-between">
+            <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{snippet.language === "json" ? "Config JSON" : "Command"}</div>
+            <button
+              onClick={() => { void copySnippet(snippet.body); }}
+              className="inline-flex items-center gap-1 rounded-md border border-border/60 bg-panel/60 px-2 py-1 text-[11px] hover:bg-panel transition-colors"
+            >
+              <Copy className="h-3 w-3" /> Copy
+            </button>
+          </div>
+          <pre className="overflow-x-auto rounded-lg border border-border/60 bg-background/60 p-3 font-mono text-[11px] leading-5 text-foreground">
+            <code>{snippet.body}</code>
+          </pre>
+        </div>
+        <div className="flex items-start gap-2 rounded-lg border border-success/30 bg-success/5 p-3 text-[12px]">
+          <Check className="mt-0.5 h-3.5 w-3.5 flex-none text-success" />
+          <div>
+            <div className="font-medium text-foreground">Verify — {label}</div>
+            <div className="mt-0.5 text-muted-foreground">{stage.verify}</div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <Card className="p-5 md:col-span-2 lg:col-span-3">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -126,18 +246,18 @@ function SetupInstructionsCard({ apiBase }: { apiBase: string }) {
             <BookOpenText className="h-4 w-4 text-primary" /> Set up your MCP client
           </div>
           <p className="mt-1 max-w-3xl text-sm leading-relaxed text-muted-foreground">
-            Pick your coding agent below to see the exact config file location, the snippet to paste (with your workspace's API URL already filled in), and how to verify the tools appear. Replace <code className="font-mono text-foreground">{TOKEN_PLACEHOLDER}</code> with the <code className="font-mono text-foreground">cak_…</code> token you generated above, and <code className="font-mono text-foreground">{CHECKOUT_PLACEHOLDER}</code> with your local clone of the CodeAtlas repo.
+            The <span className="font-medium text-foreground">remote HTTP transport</span> is the recommended setup: no Python, no repo clone, just a URL and your <code className="font-mono text-foreground">cak_…</code> PAT. Local stdio (requires cloning this repo) is still available in the Advanced section below each tab.
           </p>
         </div>
       </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3 text-[12px] text-muted-foreground">
-        <span className="font-medium text-foreground">Prereqs:</span>
-        <span>Python 3.13+</span>
+        <span className="inline-flex items-center gap-1.5 font-medium text-foreground"><Cloud className="h-3.5 w-3.5 text-primary" /> Remote HTTP:</span>
+        <span>No local install</span>
         <span className="text-border">·</span>
-        <span><a href="https://docs.astral.sh/uv/" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">uv</a></span>
+        <span>Endpoint: <code className="font-mono text-foreground">{apiBase}/mcp</code></span>
         <span className="text-border">·</span>
-        <span>Local clone of this repo with <code className="font-mono">uv sync --all-groups</code> completed.</span>
+        <span>Auth: <code className="font-mono text-foreground">Authorization: Bearer cak_…</code></span>
       </div>
 
       <Tabs defaultValue="cursor" className="mt-4">
@@ -146,47 +266,37 @@ function SetupInstructionsCard({ apiBase }: { apiBase: string }) {
             <TabsTrigger key={id} value={id}>{recipe.label}</TabsTrigger>
           ))}
         </TabsList>
-        {Object.entries(clientRecipes).map(([id, recipe]) => {
-          const snippet = recipe.snippet(apiBase);
-          return (
-            <TabsContent key={id} value={id} className="mt-3 space-y-3">
-              <div>
-                <div className="mb-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Config location</div>
-                <div className="rounded-md border border-border/60 bg-background/40 px-3 py-2 font-mono text-[11px] text-muted-foreground">{recipe.configPath}</div>
+        {Object.entries(clientRecipes).map(([id, recipe]) => (
+          <TabsContent key={id} value={id} className="mt-3 space-y-4">
+            <div>
+              <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-primary">
+                <Cloud className="h-3 w-3" /> Remote HTTP (recommended)
               </div>
-              <p className="text-sm text-muted-foreground">{recipe.intro}</p>
-              <div className="relative">
-                <div className="mb-1 flex items-center justify-between">
-                  <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{recipe.language === "json" ? "Config JSON" : "Command"}</div>
-                  <button
-                    onClick={() => { void copySnippet(snippet); }}
-                    className="inline-flex items-center gap-1 rounded-md border border-border/60 bg-panel/60 px-2 py-1 text-[11px] hover:bg-panel transition-colors"
-                  >
-                    <Copy className="h-3 w-3" /> Copy
-                  </button>
-                </div>
-                <pre className="overflow-x-auto rounded-lg border border-border/60 bg-background/60 p-3 font-mono text-[11px] leading-5 text-foreground">
-                  <code>{snippet}</code>
-                </pre>
-              </div>
-              <div className="flex items-start gap-2 rounded-lg border border-success/30 bg-success/5 p-3 text-[12px]">
-                <Check className="mt-0.5 h-3.5 w-3.5 flex-none text-success" />
-                <div>
-                  <div className="font-medium text-foreground">Verify</div>
-                  <div className="mt-0.5 text-muted-foreground">{recipe.verify}</div>
-                </div>
-              </div>
-              <a
-                href={recipe.docsUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-[12px] text-muted-foreground hover:text-foreground"
-              >
-                {recipe.label} official MCP docs <ExternalLink className="h-3 w-3" />
-              </a>
-            </TabsContent>
-          );
-        })}
+              {renderStage(recipe.http, "Remote HTTP")}
+            </div>
+            <Accordion type="single" collapsible>
+              <AccordionItem value={`${id}-stdio`} className="rounded-lg border border-border/60 bg-panel/20 px-3 border-b-0">
+                <AccordionTrigger className="hover:no-underline">
+                  <span className="inline-flex items-center gap-1.5 text-[13px]">
+                    <Terminal className="h-3.5 w-3.5" /> Advanced — local stdio bridge
+                    <span className="text-[10px] text-muted-foreground font-normal">(requires cloning this repo + Python + uv)</span>
+                  </span>
+                </AccordionTrigger>
+                <AccordionContent>
+                  {renderStage(recipe.stdio, "Local stdio")}
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+            <a
+              href={recipe.docsUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-[12px] text-muted-foreground hover:text-foreground"
+            >
+              {recipe.label} official MCP docs <ExternalLink className="h-3 w-3" />
+            </a>
+          </TabsContent>
+        ))}
       </Tabs>
 
       <div className="mt-4 rounded-lg border border-border/60 bg-panel/20 p-3 text-[12px] text-muted-foreground">

@@ -2,11 +2,18 @@
 
 Status: implemented
 
-CodeAtlas exposes a standards-compliant JSON-RPC MCP server over **stdio**. It gives coding agents architecture context without exposing a repository checkout or source files.
+CodeAtlas exposes a standards-compliant JSON-RPC MCP server. It gives coding agents architecture context without exposing a repository checkout or source files.
+
+## Transports
+
+- **Streamable HTTP (recommended)** — the hosted CodeAtlas API exposes MCP at `POST https://<api-host>/api/v1/mcp`. Coding agents authenticate with an `Authorization: Bearer <PAT>` header. No local install required. Follows the MCP 2025-03-26 Streamable HTTP transport spec.
+- **Local stdio** — the `app.mcp_server` module runs as a local Python process and forwards to the CodeAtlas HTTP API. Use for offline development against a local backend, or when your MCP client only supports stdio.
+
+Both transports share the same JSON-RPC dispatch logic and expose the same two tools.
 
 ## Compatibility
 
-The stdio server can be registered with MCP-capable clients, including Cursor, Claude Desktop, Claude Code, and OpenClaw. See [client setup](client-setup.md) for copyable configuration examples.
+Cursor, Claude Desktop (0.7+), Claude Code (`--transport http` or `--transport stdio`), and OpenClaw all support the recommended HTTP transport. See [client setup](client-setup.md) for copyable configuration examples.
 
 ## Security boundary
 
