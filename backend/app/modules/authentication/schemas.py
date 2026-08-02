@@ -1,5 +1,6 @@
 """Authentication API contracts; ORM entities never leave the module."""
 
+from datetime import datetime
 from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, Field, HttpUrl
@@ -32,5 +33,21 @@ class GitHubCallbackQuery(BaseModel):
 
 
 class CreateOrganizationRequest(BaseModel):
+    name: str = Field(min_length=2, max_length=160)
+    slug: str = Field(pattern="^[a-z0-9]+(?:-[a-z0-9]+)*$", min_length=2, max_length=80)
+
+
+class WorkspaceResponse(BaseModel):
+    id: UUID
+    name: str
+    slug: str
+    plan: str
+    status: str
+    role: MembershipRole
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class WorkspaceUpdateRequest(BaseModel):
     name: str = Field(min_length=2, max_length=160)
     slug: str = Field(pattern="^[a-z0-9]+(?:-[a-z0-9]+)*$", min_length=2, max_length=80)

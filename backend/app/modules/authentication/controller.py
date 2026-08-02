@@ -1,8 +1,9 @@
 """Authentication HTTP controllers; all business logic stays in the service."""
 
 import json
+from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import HTMLResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,11 +11,33 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import Settings, get_settings
 from app.database import get_session
 from app.modules.authentication.repository import AuthenticationRepository
-from app.modules.authentication.schemas import AccessToken, GitHubAuthorization, GitHubCallbackQuery
+from app.modules.authentication.models import MembershipRole
+from app.modules.authentication.schemas import (
+    AccessToken,
+    GitHubAuthorization,
+    GitHubCallbackQuery,
+    WorkspaceResponse,
+    WorkspaceUpdateRequest,
+)
 from app.modules.authentication.service import AuthenticationService
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 bearer_scheme = HTTPBearer(auto_error=True)
+
+
+def require_workspace_role(*permitted: MembershipRole):
+    """Authorize workspace settings without importing the downstream dependency module."""
+
+    async def authorize(
+        credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+        service: AuthenticationService = Depends(get_authentication_service),
+    ) -> dict[str, str]:
+        claims = service.decode_access_token(credentials.credentials)
+        if MembershipRole(claims["role"]) not in permitted:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient organization role")
+        return claims
+
+    return authorize
 
 
 def get_authentication_service(
@@ -79,3 +102,37 @@ async def session_claims(
     service: AuthenticationService = Depends(get_authentication_service),
 ) -> dict[str, str | int]:
     return service.decode_access_token(credentials.credentials)
+
+
+def _workspace_response(organization, role: str) -> WorkspaceResponse:
+    return WorkspaceResponse(
+        id=organization.id,
+        name=organization.name,
+        slug=organization.slug,
+        plan=organization.plan,
+        status=organization.status,
+        role=MembershipRole(role),
+        created_at=organization.created_at,
+        updated_at=organization.updated_at,
+    )
+
+
+@router.get("/workspace", response_model=WorkspaceResponse)
+async def get_workspace(
+    claims: dict[str, str] = Depends(require_workspace_role(*list(MembershipRole))),
+    service: AuthenticationService = Depends(get_persistent_authentication_service),
+) -> WorkspaceResponse:
+    organization = await service.get_workspace(UUID(claims["org"]))
+    return _workspace_response(organization, claims["role"])
+
+
+@router.put("/workspace", response_model=WorkspaceResponse)
+async def update_workspace(
+    request: WorkspaceUpdateRequest,
+    claims: dict[str, str] = Depends(require_workspace_role(MembershipRole.OWNER, MembershipRole.ADMIN)),
+    service: AuthenticationService = Depends(get_persistent_authentication_service),
+) -> WorkspaceResponse:
+    organization = await service.update_workspace(
+        UUID(claims["org"]), UUID(claims["sub"]), request.name, request.slug
+    )
+    return _workspace_response(organization, claims["role"])

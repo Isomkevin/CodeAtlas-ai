@@ -3,6 +3,7 @@
 import secrets
 from datetime import UTC, datetime, timedelta
 from urllib.parse import urlencode
+from uuid import UUID
 
 import httpx
 import jwt
@@ -148,6 +149,34 @@ class AuthenticationService:
             organization_slug=organization.slug,
             role=MembershipRole(claims["role"]),
         )
+
+    async def get_workspace(self, organization_id: UUID) -> Organization:
+        if self._repository is None:
+            raise RuntimeError("Workspace settings require a persistence repository")
+        organization = await self._repository.get_organization(organization_id)
+        if organization is None:
+            raise HTTPException(status_code=404, detail="Workspace not found")
+        return organization
+
+    async def update_workspace(
+        self, organization_id: UUID, actor_id: UUID, name: str, slug: str
+    ) -> Organization:
+        if self._repository is None:
+            raise RuntimeError("Workspace settings require a persistence repository")
+        organization = await self.get_workspace(organization_id)
+        if slug != organization.slug:
+            existing = await self._repository.find_organization_by_slug(slug)
+            if existing is not None and existing.id != organization.id:
+                raise HTTPException(status_code=409, detail="Workspace slug is already in use")
+        updated = await self._repository.update_organization(organization, name, slug)
+        await self._repository.add_audit(
+            action="workspace.updated",
+            resource_type="organization",
+            organization_id=organization_id,
+            actor_id=actor_id,
+        )
+        await self._repository.commit()
+        return updated
 
     def decode_access_token(self, token: str) -> dict[str, str]:
         claims = self._decode(token)

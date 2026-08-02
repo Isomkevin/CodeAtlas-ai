@@ -77,6 +77,17 @@ export type WorkspaceAIProvider = {
   updated_at: string | null;
 };
 
+export type Workspace = {
+  id: string;
+  name: string;
+  slug: string;
+  plan: string;
+  status: string;
+  role: "owner" | "admin" | "member" | "viewer";
+  created_at: string | null;
+  updated_at: string | null;
+};
+
 export const apiBaseUrl = import.meta.env.VITE_CODEATLAS_API_URL ?? "http://localhost:8000";
 
 export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -182,4 +193,15 @@ export function saveWorkspaceAIProvider(input: {
 
 export function removeWorkspaceAIProvider() {
   return apiRequest<WorkspaceAIProvider>("/ai/provider", { method: "DELETE" });
+}
+
+export function getWorkspace() {
+  return apiRequest<Workspace>("/auth/workspace");
+}
+
+export function updateWorkspace(input: { name: string; slug: string }) {
+  return apiRequest<Workspace>("/auth/workspace", {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
 }

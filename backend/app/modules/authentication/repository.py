@@ -42,6 +42,26 @@ class AuthenticationRepository:
         )
         return row.first()
 
+    async def get_organization(self, organization_id: UUID) -> Organization | None:
+        return await self._session.scalar(
+            select(Organization).where(
+                Organization.id == organization_id, Organization.deleted_at.is_(None)
+            )
+        )
+
+    async def find_organization_by_slug(self, slug: str) -> Organization | None:
+        return await self._session.scalar(
+            select(Organization).where(
+                Organization.slug == slug, Organization.deleted_at.is_(None)
+            )
+        )
+
+    async def update_organization(self, organization: Organization, name: str, slug: str) -> Organization:
+        organization.name = name
+        organization.slug = slug
+        await self._session.flush()
+        return organization
+
     async def commit(self) -> None:
         await self._session.commit()
 
