@@ -27,12 +27,18 @@ import {
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
+type Section = "general" | "integrations" | "agents" | "notifications" | "billing";
+
+const sectionIds: Section[] = ["general", "integrations", "agents", "notifications", "billing"];
+
 export const Route = createFileRoute("/settings")({
   head: () => ({ meta: [{ title: "Settings · CodeAtlas" }] }),
+  validateSearch: (search: Record<string, unknown>): { tab?: Section } => {
+    const tab = search.tab;
+    return typeof tab === "string" && (sectionIds as string[]).includes(tab) ? { tab: tab as Section } : {};
+  },
   component: SettingsPage,
 });
-
-type Section = "general" | "integrations" | "agents" | "notifications" | "billing";
 
 const sections: Array<{ id: Section; label: string; icon: typeof Users }> = [
   { id: "general", label: "General", icon: Users },
@@ -45,7 +51,8 @@ const sections: Array<{ id: Section; label: string; icon: typeof Users }> = [
 const inputClass = "w-full rounded-lg border border-border bg-panel/60 px-3 py-2 text-sm outline-none focus:border-primary/60 disabled:cursor-not-allowed disabled:opacity-60";
 
 function SettingsPage() {
-  const [active, setActive] = useState<Section>("general");
+  const { tab } = Route.useSearch();
+  const [active, setActive] = useState<Section>(tab ?? "general");
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [workspaceName, setWorkspaceName] = useState("");
   const [workspaceSlug, setWorkspaceSlug] = useState("");

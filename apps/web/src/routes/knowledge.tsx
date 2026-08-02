@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/app-shell";
 import { Card, KindBadge, SectionTitle } from "@/components/atlas-ui";
 import { graphNodeKind } from "@/lib/graph-ui";
 import { listGraphVersions, listRepositories, loadArchitectureGraph, type ArchitectureGraphEdge, type ArchitectureGraphNode, type GraphVersion } from "@/lib/api";
+import { ApiErrorBanner } from "@/components/api-error-banner";
 import { Search, ArrowRight, Clock, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -52,7 +53,7 @@ function KnowledgePage() {
   return (
     <div>
       <PageHeader eyebrow={repositoryName ?? "Semantic"} title="Knowledge graph" description="Search the canonical architecture graph and inspect versioned graph history." />
-      {error && <div className="mx-6 mb-3 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div>}
+      <ApiErrorBanner error={error} />
       <div className="px-6 py-6 md:px-8">
         <div className="relative mb-6">
           <div className="absolute inset-x-0 -top-8 -z-10 mx-auto h-32 max-w-2xl rounded-full bg-primary/20 blur-3xl" />

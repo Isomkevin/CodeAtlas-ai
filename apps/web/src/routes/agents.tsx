@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { PageHeader } from "@/components/app-shell";
 import { Card, StatusDot } from "@/components/atlas-ui";
 import { apiBaseUrl, listArtifacts, listGraphVersions, listImplementationPlans, listRepositories, type ArchitectureArtifact, type GraphVersion, type ImplementationPlan } from "@/lib/api";
+import { ApiErrorBanner } from "@/components/api-error-banner";
 import { Compass, Network, BookOpen, Terminal, Check, Copy } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -76,7 +77,7 @@ function AgentsPage() {
 
   return <div>
     <PageHeader eyebrow="Autonomous" title="AI agents" description="Live architecture workflows executing against canonical graph versions." />
-    {error && <div className="mx-6 mb-3 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div>}
+    <ApiErrorBanner error={error} />
     <div className="grid grid-cols-1 gap-4 px-6 py-6 md:grid-cols-2 md:px-8 lg:grid-cols-3">
       <Card className="p-5 md:col-span-2 lg:col-span-3"><div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between"><div><div className="flex items-center gap-2 text-base font-semibold"><Terminal className="h-4 w-4 text-primary" />Connect an MCP coding agent</div><p className="mt-1 max-w-3xl text-sm leading-relaxed text-muted-foreground">Cursor, Claude Desktop, Claude Code, and OpenClaw can use the local CodeAtlas stdio bridge to read architecture graphs and create approval-gated plans. The bridge never exposes source files.</p></div><button onClick={() => { void copyMcpConfiguration(); }} className="inline-flex flex-none items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90">{mcpCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}{mcpCopied ? "Private config copied" : "Copy private MCP config"}</button></div><div className="mt-4 rounded-lg border border-border/60 bg-background/40 p-3 font-mono text-[11px] leading-5 text-muted-foreground">get_architecture_graph · create_implementation_plan<br />Run from the CodeAtlas checkout: <span className="text-foreground">uv run python -m app.mcp_server</span></div>{mcpError && <p className="mt-3 text-xs text-danger">{mcpError}</p>}<p className="mt-3 text-[11px] text-muted-foreground">The copied configuration contains your short-lived workspace token. Keep it in local agent settings only; client-specific instructions are in <code>docs/07-mcp/client-setup.md</code>.</p></Card>
       {agents.map((agent) => {

@@ -90,6 +90,18 @@ export type Workspace = {
 
 export const apiBaseUrl = import.meta.env.VITE_CODEATLAS_API_URL ?? "http://localhost:8000";
 
+export class ApiAuthError extends Error {
+  readonly isApiAuthError = true as const;
+  constructor(message = "Not authenticated") {
+    super(message);
+    this.name = "ApiAuthError";
+  }
+}
+
+export function isApiAuthError(value: unknown): value is ApiAuthError {
+  return value instanceof Error && (value as ApiAuthError).isApiAuthError === true;
+}
+
 export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = window.sessionStorage.getItem("codeatlas.access_token");
   const response = await fetch(`${apiBaseUrl}/api/v1${path}`, {
@@ -103,7 +115,9 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
   });
   if (!response.ok) {
     const payload = await response.json().catch(() => null) as { detail?: string; message?: string } | null;
-    throw new Error(payload?.message ?? payload?.detail ?? `Request failed (${response.status})`);
+    const message = payload?.message ?? payload?.detail ?? `Request failed (${response.status})`;
+    if (response.status === 401) throw new ApiAuthError(typeof message === "string" ? message : "Not authenticated");
+    throw new Error(typeof message === "string" ? message : `Request failed (${response.status})`);
   }
   return response.json() as Promise<T>;
 }

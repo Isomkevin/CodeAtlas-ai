@@ -12,6 +12,7 @@ import {
   type ApiRepository,
   type ArchitectureGraph as ApiArchitectureGraph,
 } from "@/lib/api";
+import { ApiErrorBanner } from "@/components/api-error-banner";
 import {
   ChevronRight, ChevronDown, Filter, GitCompare, LayoutGrid, Maximize2, Search, ScanLine,
   GitBranch, Database, Server, Boxes, Zap, Cpu, Sparkles, ArrowRight, ArrowLeft,
@@ -173,7 +174,7 @@ function ArchitecturePage() {
         }
       />
 
-      {error && <div className="mx-5 mb-3 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div>}
+      <ApiErrorBanner error={error} className="mx-5" />
       <div className="grid min-h-[calc(100vh-140px)] grid-cols-1 lg:grid-cols-[260px_1fr_340px]">
         {/* Left: repository explorer */}
         <aside className="hidden lg:flex flex-col border-r border-border/70 bg-sidebar/40">

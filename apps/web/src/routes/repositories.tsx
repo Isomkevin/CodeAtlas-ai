@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { PageHeader } from "@/components/app-shell";
 import { Card, SectionTitle, StatusDot } from "@/components/atlas-ui";
 import { connectRepository, listRepositories, requestRepositoryScan, type ApiRepository } from "@/lib/api";
+import { ApiErrorBanner } from "@/components/api-error-banner";
 import { GitBranch, Plus, Search, ChevronRight, ScanLine } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -72,7 +73,7 @@ function RepositoriesPage() {
           </button>
         </>}
       />
-      {error && <div className="mx-6 mb-3 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div>}
+      <ApiErrorBanner error={error} />
 
       <div className="px-6 py-6 md:px-8">
         <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">

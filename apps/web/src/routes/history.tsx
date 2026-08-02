@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { PageHeader } from "@/components/app-shell";
 import { Card, SectionTitle } from "@/components/atlas-ui";
 import { listArtifacts, listGraphVersions, listImplementationPlans, listRepositories, type ArchitectureArtifact, type GraphVersion, type ImplementationPlan } from "@/lib/api";
+import { ApiErrorBanner } from "@/components/api-error-banner";
 import { Network, BookOpen, Waypoints, Terminal, GitCommit } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -49,7 +50,7 @@ function HistoryPage() {
 
   return <div>
     <PageHeader eyebrow={repositoryName ?? "Timeline"} title="History" description="A versioned timeline of the canonical graph, generated artifacts, and implementation plans." />
-    {error && <div className="mx-6 mb-3 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div>}
+    <ApiErrorBanner error={error} />
     <div className="grid grid-cols-1 gap-4 px-6 py-6 md:grid-cols-3 md:px-8">
       <Card className="p-5 md:col-span-2"><SectionTitle right={<span className="text-[11px] font-mono text-muted-foreground">{versions.length} graph versions</span>}>Timeline</SectionTitle><ol className="relative ml-2 space-y-5 border-l border-border/70 pl-5">{events.map((event) => { const Icon = iconFor(event.type); return <li key={event.id} className="relative"><span className="absolute -left-[27px] top-0 flex h-5 w-5 items-center justify-center rounded-full border border-border bg-panel"><Icon className="h-2.5 w-2.5 text-primary" /></span><div className="text-[11px] font-mono text-muted-foreground">{timestamp(event.at)}</div><div className="mt-0.5 text-sm font-medium">{event.title}</div><div className="mt-0.5 text-[11px] text-muted-foreground">{event.detail}</div></li>; })}</ol>{!events.length && <div className="py-8 text-center text-sm text-muted-foreground">Scan a repository to create a history.</div>}</Card>
       <Card className="p-5"><SectionTitle>Latest graph</SectionTitle>{latestVersion ? <div className="rounded-xl border border-border/60 bg-panel/40 p-3 font-mono text-[12px] leading-relaxed"><div className="text-muted-foreground">version: {latestVersion.sequence}</div><div className="text-muted-foreground">commit: {latestVersion.commit_sha}</div><div className="text-muted-foreground">status: {latestVersion.status}</div><div className="mt-2 text-foreground">{Object.entries(latestVersion.summary).map(([key, value]) => <div key={key}>{key}: {String(value)}</div>)}</div></div> : <div className="text-sm text-muted-foreground">No graph version is available.</div>}</Card>
