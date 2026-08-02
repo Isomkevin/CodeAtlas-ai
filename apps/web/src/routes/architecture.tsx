@@ -5,6 +5,8 @@ import { ArchitectureGraph } from "@/components/architecture-graph";
 import { AiChat } from "@/components/ai-chat";
 import { graphNodeKind, nodeColors, type NodeKind } from "@/lib/graph-ui";
 import {
+  createImplementationPlan,
+  generateArtifact,
   listRepositories,
   loadArchitectureGraph,
   requestRepositoryScan,
@@ -19,10 +21,12 @@ import { useCollapsiblePanel } from "@/lib/use-collapsible-panel";
 import { useKeyboardShortcut } from "@/lib/use-keyboard-shortcut";
 import { useUIState } from "@/lib/ui-state";
 import {
-  ChevronRight, ChevronDown, ChevronLeft, ChevronsLeft, ChevronsRight, Filter, GitCompare, LayoutGrid, Maximize2, Minimize2, Search, ScanLine,
+  ChevronRight, ChevronDown, ChevronLeft, ChevronsLeft, ChevronsRight, Maximize2, Minimize2, Search, ScanLine,
   GitBranch, Database, Server, Boxes, Zap, Cpu, Sparkles, ArrowRight, ArrowLeft, X,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
+import { useNavigate } from "@tanstack/react-router";
+import { toast } from "sonner";
 import { useEffect, useMemo, useState } from "react";
 
 const SPRING = { type: "spring" as const, stiffness: 380, damping: 34 };
@@ -50,6 +54,9 @@ function ArchitecturePage() {
   const { collapsed: inspectorCollapsed, toggle: toggleInspector } = useCollapsiblePanel("arch.inspector");
   const { focusMode, setFocusMode, toggleFocusMode } = useUIState();
   const [focusPeek, setFocusPeek] = useState<null | "explorer" | "inspector">(null);
+  const [generatingDoc, setGeneratingDoc] = useState(false);
+  const [planningRefactor, setPlanningRefactor] = useState(false);
+  const navigate = useNavigate();
 
   useKeyboardShortcut("[", () => (focusMode ? setFocusPeek((p) => (p === "explorer" ? null : "explorer")) : toggleExplorer()));
   useKeyboardShortcut("]", () => (focusMode ? setFocusPeek((p) => (p === "inspector" ? null : "inspector")) : toggleInspector()));
@@ -158,6 +165,44 @@ function ArchitecturePage() {
       setIsScanning(false);
     }
   };
+
+  const generateDocumentation = async () => {
+    if (!repository) return;
+    setGeneratingDoc(true);
+    try {
+      await generateArtifact(repository.id, "documentation");
+      toast.success("Documentation generated", {
+        description: "Open the Documentation page to review the new artifact.",
+        action: { label: "Open", onClick: () => { void navigate({ to: "/documentation" }); } },
+      });
+    } catch (reason) {
+      const message = reason instanceof Error ? reason.message : "Unable to generate documentation";
+      setError(message);
+      toast.error(message);
+    } finally {
+      setGeneratingDoc(false);
+    }
+  };
+
+  const planRefactor = async (nodeLabel: string) => {
+    if (!repository) return;
+    setPlanningRefactor(true);
+    try {
+      const request = `Refactor ${nodeLabel}: improve boundaries, extract collaborators, and tighten tests where the graph shows tight coupling.`;
+      const plan = await createImplementationPlan(repository.id, request);
+      toast.success("Implementation plan created", {
+        description: `${plan.plan_json.tasks?.length ?? 0} task${plan.plan_json.tasks?.length === 1 ? "" : "s"} — awaiting approval.`,
+        action: { label: "Review", onClick: () => { void navigate({ to: "/implementation" }); } },
+      });
+      void navigate({ to: "/implementation" });
+    } catch (reason) {
+      const message = reason instanceof Error ? reason.message : "Unable to plan refactor";
+      setError(message);
+      toast.error(message);
+    } finally {
+      setPlanningRefactor(false);
+    }
+  };
   const selected = archNodes.find((n) => n.id === selectedId) ?? null;
 
   const connections = useMemo(() => {
@@ -249,11 +294,9 @@ function ArchitecturePage() {
       </div>
 
       <div>
-        <div className="mb-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">Signals</div>
+        <div className="mb-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">Connections</div>
         <div className="grid grid-cols-2 gap-2">
           {[
-            { l: "Health", v: "82", tone: "text-info" },
-            { l: "Drift",  v: "14%", tone: "text-warning" },
             { l: "In",     v: connections.inbound.length.toString(),  tone: "text-foreground" },
             { l: "Out",    v: connections.outbound.length.toString(), tone: "text-foreground" },
           ].map((s) => (
@@ -312,11 +355,19 @@ function ArchitecturePage() {
       )}
 
       <div className="space-y-2 pt-2">
-        <button className="w-full rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 transition-opacity">
-          Generate documentation
+        <button
+          onClick={() => { void generateDocumentation(); }}
+          disabled={!repository || generatingDoc}
+          className="w-full rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-50"
+        >
+          {generatingDoc ? "Generating documentation…" : "Generate documentation"}
         </button>
-        <button className="w-full rounded-lg border border-border bg-panel/60 px-3 py-2 text-sm hover:bg-panel transition-colors">
-          Plan refactor
+        <button
+          onClick={() => { void planRefactor(selected?.label ?? "the selected component"); }}
+          disabled={!repository || !selected || planningRefactor}
+          className="w-full rounded-lg border border-border bg-panel/60 px-3 py-2 text-sm hover:bg-panel transition-colors disabled:opacity-50"
+        >
+          {planningRefactor ? "Creating plan…" : "Plan refactor"}
         </button>
       </div>
     </div>
@@ -349,14 +400,9 @@ function ArchitecturePage() {
               title={<span>Architecture <span className="text-muted-foreground font-normal">/ {repository?.default_branch ?? "no repository"}</span></span>}
               description="Live, interactive graph of services, modules, APIs, and data. Click a node to inspect."
               actions={
-                <>
-                  <button className="inline-flex items-center gap-2 rounded-lg border border-border bg-panel px-3 py-2 text-sm hover:bg-panel/80 transition-colors">
-                    <GitCompare className="h-4 w-4" /> Compare <span className="font-mono text-muted-foreground">v41 → v42</span>
-                  </button>
-                  <button onClick={scan} disabled={!repository || isScanning || scanState !== "idle"} className="inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 transition-opacity disabled:cursor-not-allowed disabled:opacity-50">
-                    <ScanLine className="h-4 w-4" /> {isScanning ? "Queueing scan" : scanState === "queued" ? "Scan queued" : scanState === "running" ? "Scanning" : "Scan"}
-                  </button>
-                </>
+                <button onClick={scan} disabled={!repository || isScanning || scanState !== "idle"} className="inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 transition-opacity disabled:cursor-not-allowed disabled:opacity-50">
+                  <ScanLine className="h-4 w-4" /> {isScanning ? "Queueing scan" : scanState === "queued" ? "Scan queued" : scanState === "running" ? "Scanning" : "Scan"}
+                </button>
               }
             />
             <ApiErrorBanner error={error} className="mx-5" />
@@ -404,16 +450,13 @@ function ArchitecturePage() {
         {/* Center: graph + bottom chat */}
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="flex items-center gap-1.5 border-b border-border/70 bg-panel/30 px-3 py-2">
-            <button className="rounded-md border border-border bg-panel/60 px-2 py-1 text-[11px] inline-flex items-center gap-1.5 hover:bg-panel transition-colors">
-              <Filter className="h-3 w-3" /> Filter
-            </button>
-            <button className="rounded-md border border-border bg-panel/60 px-2 py-1 text-[11px] inline-flex items-center gap-1.5 hover:bg-panel transition-colors">
-              <LayoutGrid className="h-3 w-3" /> Auto-layout
-            </button>
-            <button className="rounded-md border border-border bg-panel/60 px-2 py-1 text-[11px] hover:bg-panel transition-colors">Highlight deps</button>
             <div className="ml-auto flex items-center gap-2 text-[11px] text-muted-foreground font-mono">
-              <span>v42</span>
-              <span className="text-border">·</span>
+              {graph?.version_id && (
+                <>
+                  <span title={graph.version_id}>{graph.version_id.slice(0, 8)}</span>
+                  <span className="text-border">·</span>
+                </>
+              )}
               <span>{archNodes.length} nodes</span>
               <span className="text-border">·</span>
               <span>{archEdges.length} edges</span>
