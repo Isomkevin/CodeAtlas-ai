@@ -11,8 +11,9 @@ import { ApiErrorBanner } from "@/components/api-error-banner";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Compass, Network, BookOpen, Terminal, Check, Copy, Plus, Trash2, KeyRound, AlertTriangle } from "lucide-react";
+import { Compass, Network, BookOpen, Terminal, Check, Copy, Plus, Trash2, KeyRound, AlertTriangle, BookOpenText, ExternalLink } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 export const Route = createFileRoute("/agents")({
@@ -21,6 +22,193 @@ export const Route = createFileRoute("/agents")({
 });
 
 type Agent = { id: string; name: string; icon: typeof Compass; completed: number; latest: string | null; description: string };
+
+const TOKEN_PLACEHOLDER = "<PASTE-cak-TOKEN-HERE>";
+const CHECKOUT_PLACEHOLDER = "/absolute/path/to/CodeAtlas-ai";
+
+type ClientRecipe = {
+  label: string;
+  configPath: string;
+  intro: string;
+  snippet: (apiBase: string) => string;
+  language: "json" | "shell";
+  verify: string;
+  docsUrl: string;
+};
+
+const clientRecipes: Record<string, ClientRecipe> = {
+  cursor: {
+    label: "Cursor",
+    configPath: "~/.cursor/mcp.json  (user)   —or—   .cursor/mcp.json  (project, do not commit)",
+    intro: "Cursor discovers stdio MCP servers via a JSON config file. Add CodeAtlas under `mcpServers`, then restart Cursor.",
+    language: "json",
+    snippet: (apiBase) => JSON.stringify({
+      mcpServers: {
+        codeatlas: {
+          command: "uv",
+          args: ["--directory", CHECKOUT_PLACEHOLDER, "run", "python", "-m", "app.mcp_server"],
+          env: {
+            CODEATLAS_MCP_API_BASE_URL: apiBase,
+            CODEATLAS_MCP_TOKEN: TOKEN_PLACEHOLDER,
+          },
+        },
+      },
+    }, null, 2),
+    verify: "Restart Cursor. In the AI chat, ask 'list your MCP tools' — you should see get_architecture_graph and create_implementation_plan.",
+    docsUrl: "https://docs.cursor.com/context/model-context-protocol",
+  },
+  "claude-desktop": {
+    label: "Claude Desktop",
+    configPath: "macOS: ~/Library/Application Support/Claude/claude_desktop_config.json  ·  Windows: %APPDATA%\\Claude\\claude_desktop_config.json",
+    intro: "Claude Desktop needs an absolute path via `--directory` because it doesn't inherit a working directory.",
+    language: "json",
+    snippet: (apiBase) => JSON.stringify({
+      mcpServers: {
+        codeatlas: {
+          command: "uv",
+          args: ["--directory", CHECKOUT_PLACEHOLDER, "run", "python", "-m", "app.mcp_server"],
+          env: {
+            CODEATLAS_MCP_API_BASE_URL: apiBase,
+            CODEATLAS_MCP_TOKEN: TOKEN_PLACEHOLDER,
+          },
+        },
+      },
+    }, null, 2),
+    verify: "Restart Claude Desktop. Click the hammer/tools icon — CodeAtlas' two tools should be listed.",
+    docsUrl: "https://support.claude.com/en/articles/10949351-getting-started-with-local-mcp-servers-on-claude-desktop",
+  },
+  "claude-code": {
+    label: "Claude Code",
+    configPath: "Registered via CLI; the entry lands in ~/.claude.json (user scope).",
+    intro: "Register the bridge in one command. Prefer --scope user so the token never lands in a project's .mcp.json.",
+    language: "shell",
+    snippet: (apiBase) => `claude mcp add codeatlas \\
+  --scope user \\
+  --transport stdio \\
+  --env CODEATLAS_MCP_API_BASE_URL=${apiBase} \\
+  --env CODEATLAS_MCP_TOKEN=${TOKEN_PLACEHOLDER} \\
+  -- uv --directory ${CHECKOUT_PLACEHOLDER} run python -m app.mcp_server`,
+    verify: "Run `claude mcp list` — codeatlas should show ✓ Connected. Inside a claude session, `/mcp` shows the tools inventory.",
+    docsUrl: "https://code.claude.com/docs/en/mcp",
+  },
+  openclaw: {
+    label: "OpenClaw",
+    configPath: "Registered via the openclaw CLI.",
+    intro: "OpenClaw exposes an `mcp add` command plus a `doctor --probe` that spawns the bridge and enumerates tools.",
+    language: "shell",
+    snippet: (apiBase) => `openclaw mcp add codeatlas \\
+  --command uv \\
+  --arg --directory --arg ${CHECKOUT_PLACEHOLDER} \\
+  --arg run --arg python --arg -m --arg app.mcp_server \\
+  --env CODEATLAS_MCP_API_BASE_URL=${apiBase} \\
+  --env CODEATLAS_MCP_TOKEN=${TOKEN_PLACEHOLDER}
+
+openclaw mcp doctor codeatlas --probe`,
+    verify: "The `doctor --probe` command should print both tool names. If it fails, re-check the checkout path.",
+    docsUrl: "https://docs.openclaw.ai/cli/mcp",
+  },
+};
+
+function SetupInstructionsCard({ apiBase }: { apiBase: string }) {
+  const copySnippet = async (snippet: string) => {
+    try {
+      await navigator.clipboard.writeText(snippet);
+      toast.success("Snippet copied");
+    } catch {
+      toast.error("Clipboard blocked — copy manually");
+    }
+  };
+  return (
+    <Card className="p-5 md:col-span-2 lg:col-span-3">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <div className="flex items-center gap-2 text-base font-semibold">
+            <BookOpenText className="h-4 w-4 text-primary" /> Set up your MCP client
+          </div>
+          <p className="mt-1 max-w-3xl text-sm leading-relaxed text-muted-foreground">
+            Pick your coding agent below to see the exact config file location, the snippet to paste (with your workspace's API URL already filled in), and how to verify the tools appear. Replace <code className="font-mono text-foreground">{TOKEN_PLACEHOLDER}</code> with the <code className="font-mono text-foreground">cak_…</code> token you generated above, and <code className="font-mono text-foreground">{CHECKOUT_PLACEHOLDER}</code> with your local clone of the CodeAtlas repo.
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3 text-[12px] text-muted-foreground">
+        <span className="font-medium text-foreground">Prereqs:</span>
+        <span>Python 3.13+</span>
+        <span className="text-border">·</span>
+        <span><a href="https://docs.astral.sh/uv/" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">uv</a></span>
+        <span className="text-border">·</span>
+        <span>Local clone of this repo with <code className="font-mono">uv sync --all-groups</code> completed.</span>
+      </div>
+
+      <Tabs defaultValue="cursor" className="mt-4">
+        <TabsList className="w-full justify-start bg-panel/40">
+          {Object.entries(clientRecipes).map(([id, recipe]) => (
+            <TabsTrigger key={id} value={id}>{recipe.label}</TabsTrigger>
+          ))}
+        </TabsList>
+        {Object.entries(clientRecipes).map(([id, recipe]) => {
+          const snippet = recipe.snippet(apiBase);
+          return (
+            <TabsContent key={id} value={id} className="mt-3 space-y-3">
+              <div>
+                <div className="mb-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Config location</div>
+                <div className="rounded-md border border-border/60 bg-background/40 px-3 py-2 font-mono text-[11px] text-muted-foreground">{recipe.configPath}</div>
+              </div>
+              <p className="text-sm text-muted-foreground">{recipe.intro}</p>
+              <div className="relative">
+                <div className="mb-1 flex items-center justify-between">
+                  <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{recipe.language === "json" ? "Config JSON" : "Command"}</div>
+                  <button
+                    onClick={() => { void copySnippet(snippet); }}
+                    className="inline-flex items-center gap-1 rounded-md border border-border/60 bg-panel/60 px-2 py-1 text-[11px] hover:bg-panel transition-colors"
+                  >
+                    <Copy className="h-3 w-3" /> Copy
+                  </button>
+                </div>
+                <pre className="overflow-x-auto rounded-lg border border-border/60 bg-background/60 p-3 font-mono text-[11px] leading-5 text-foreground">
+                  <code>{snippet}</code>
+                </pre>
+              </div>
+              <div className="flex items-start gap-2 rounded-lg border border-success/30 bg-success/5 p-3 text-[12px]">
+                <Check className="mt-0.5 h-3.5 w-3.5 flex-none text-success" />
+                <div>
+                  <div className="font-medium text-foreground">Verify</div>
+                  <div className="mt-0.5 text-muted-foreground">{recipe.verify}</div>
+                </div>
+              </div>
+              <a
+                href={recipe.docsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-[12px] text-muted-foreground hover:text-foreground"
+              >
+                {recipe.label} official MCP docs <ExternalLink className="h-3 w-3" />
+              </a>
+            </TabsContent>
+          );
+        })}
+      </Tabs>
+
+      <div className="mt-4 rounded-lg border border-border/60 bg-panel/20 p-3 text-[12px] text-muted-foreground">
+        <div className="font-medium text-foreground">Troubleshooting</div>
+        <ul className="mt-2 space-y-1 pl-4">
+          <li className="list-disc"><span className="font-mono text-foreground">Personal access token is invalid or revoked</span> — regenerate on this page and update your client config.</li>
+          <li className="list-disc"><span className="font-mono text-foreground">Unable to reach CodeAtlas API</span> — the free-tier backend spins down after inactivity; first request wakes it (30–60s). Retry.</li>
+          <li className="list-disc">Tools don't appear — restart the client after editing config. Verify the <code className="font-mono">--directory</code> value points at a real CodeAtlas checkout.</li>
+          <li className="list-disc">403 on a repository — connect the repository under Settings → Integrations first.</li>
+        </ul>
+        <a
+          href="https://github.com/Isomkevin/CodeAtlas-ai/blob/main/docs/07-mcp/client-setup.md"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-3 inline-flex items-center gap-1 text-foreground hover:underline"
+        >
+          Full setup guide with troubleshooting <ExternalLink className="h-3 w-3" />
+        </a>
+      </div>
+    </Card>
+  );
+}
 
 const timestamp = (value: string | null) =>
   value ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "awaiting work";
@@ -201,9 +389,12 @@ function AgentsPage() {
           </div>
 
           <p className="mt-3 text-[11px] text-muted-foreground">
-            Client-specific setup instructions live in <code>docs/07-mcp/client-setup.md</code>. Tokens carry your workspace role — treat them like a password.
+            Tokens carry your workspace role — treat them like a password. See the full walkthrough in{" "}
+            <a href="https://github.com/Isomkevin/CodeAtlas-ai/blob/main/docs/07-mcp/client-setup.md" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">docs/07-mcp/client-setup.md</a>.
           </p>
         </Card>
+
+        <SetupInstructionsCard apiBase={`${apiBaseUrl}/api/v1`} />
 
         {agents.map((agent) => {
           const Icon = agent.icon;

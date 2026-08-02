@@ -139,11 +139,13 @@ The checked-in Compose stack is for local development only. The supported hosted
 
 Run a worker outside Compose with `uv run celery -A app.worker.celery_app worker --pool=solo --loglevel=INFO` for native parser safety in a local environment. The Architecture page reads `/repositories/{id}/graph` and queues scans through the live API. Set `VITE_CODEATLAS_API_URL=http://localhost:8000` if the frontend uses a non-default API host.
 
-The MCP stdio bridge exposes only `get_architecture_graph` and `create_implementation_plan`; it does not expose raw repository files. Start it with a tenant-scoped API token:
+The MCP stdio bridge exposes only `get_architecture_graph` and `create_implementation_plan`; it does not expose raw repository files. Authenticate it with a **personal access token** (starts with `cak_`) minted from the CodeAtlas UI at **Settings → Agents → Generate MCP token** — see [MCP client setup](docs/07-mcp/client-setup.md) for step-by-step guides per client.
+
+For a quick local sanity check with the bridge:
 
 ```powershell
-$env:CODEATLAS_MCP_API_BASE_URL="http://localhost:8000/api/v1"
-$env:CODEATLAS_MCP_TOKEN="<tenant-scoped JWT>"
+$env:CODEATLAS_MCP_API_BASE_URL="https://codeatlas-api-r0e9.onrender.com/api/v1"  # or http://localhost:8000/api/v1
+$env:CODEATLAS_MCP_TOKEN="cak_..."
 uv run python -m app.mcp_server
 ```
 
@@ -151,7 +153,7 @@ Every implementation plan is a draft until an owner or administrator approves it
 
 ### AI coding-agent integration and BYOK
 
-The MCP bridge connects CodeAtlas architecture context to Cursor, Claude Desktop, Claude Code, and OpenClaw. Use the copyable, client-specific setup in [MCP client setup](docs/07-mcp/client-setup.md); the **Agents** screen can also copy a private configuration based on the current session. MCP tokens are short-lived workspace JWTs and must never be committed.
+The MCP bridge connects CodeAtlas architecture context to Cursor, Claude Desktop, Claude Code, and OpenClaw. Full walkthrough with client-specific configs, verification steps, and troubleshooting: **[docs/07-mcp/client-setup.md](docs/07-mcp/client-setup.md)**. The **Agents** screen mints tokens interactively and can copy a fully-formed MCP config JSON to your clipboard. Personal access tokens are long-lived, revocable, and never expire on browser sign-out; treat them like a password and never commit them.
 
 Workspace owners and administrators can configure an OpenAI-compatible API key, base URL, and model from **Settings → AI model provider**. This BYOK configuration is encrypted at rest, its plaintext key is never returned by the API, and it overrides the deployment-wide `CODEATLAS_AI_API_KEY` only for that workspace. If no workspace key is configured, CodeAtlas uses the deployment key when available or continues in deterministic graph-only mode.
 

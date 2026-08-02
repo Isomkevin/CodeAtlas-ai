@@ -12,12 +12,14 @@ The stdio server can be registered with MCP-capable clients, including Cursor, C
 
 The MCP bridge is a small local process that forwards requests to the tenant-scoped CodeAtlas HTTP API. It requires:
 
-- `CODEATLAS_MCP_API_BASE_URL`, for example `https://api.example.com/api/v1`
-- `CODEATLAS_MCP_TOKEN`, a CodeAtlas JWT for the intended workspace
+- `CODEATLAS_MCP_API_BASE_URL`, for example `https://codeatlas-api-r0e9.onrender.com/api/v1`
+- `CODEATLAS_MCP_TOKEN`, a CodeAtlas **personal access token** (starts with `cak_`) minted from Settings → Agents
+
+Personal access tokens are long-lived and workspace-scoped. They carry the issuer's workspace role and can be revoked at any time from the CodeAtlas UI. The bridge accepts both PATs and short-lived session JWTs, but PATs are the recommended mode for local coding agents because they survive browser sign-out.
 
 The bridge sends the token only as an API bearer credential. It never reads a local checkout, clones a repository, or exposes raw source files to an agent. The API still enforces the caller's workspace and repository authorization.
 
-Treat the MCP token as a secret. Store it in the agent's local configuration or secret store; never commit it to `.cursor/mcp.json`, `.mcp.json`, or another shared configuration file.
+Treat the MCP token as a secret. Store it in the agent's user-scope local configuration; never commit it to `.cursor/mcp.json`, `.mcp.json`, or another shared configuration file.
 
 ## Implemented tools
 
