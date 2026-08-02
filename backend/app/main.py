@@ -20,6 +20,7 @@ from app.modules.intelligence.controller import (
 from app.modules.intelligence.controller import (
     settings_router as intelligence_settings_router,
 )
+from app.modules.mcp_http.controller import router as mcp_http_router
 from app.modules.mcp_tokens.controller import router as mcp_tokens_router
 from app.modules.repository.controller import router as repository_router
 from app.modules.repository.events import router as repository_events_router
@@ -87,6 +88,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(intelligence_settings_router, prefix=resolved_settings.api_v1_prefix)
     app.include_router(implementation_router, prefix=resolved_settings.api_v1_prefix)
     app.include_router(mcp_tokens_router, prefix=resolved_settings.api_v1_prefix)
+    app.include_router(mcp_http_router, prefix=resolved_settings.api_v1_prefix)
     configure_observability(app, resolved_settings)
     return app
 
