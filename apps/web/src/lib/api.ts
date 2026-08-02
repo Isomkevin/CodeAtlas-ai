@@ -49,15 +49,37 @@ export type ArchitectureArtifact = {
   created_at: string;
 };
 
+export type ImplementationPlanTask = {
+  id: string;
+  title: string;
+  node_id?: string;
+  path?: string;
+  acceptance_criteria?: string[];
+};
+
+export type ImplementationPlanJson = {
+  graph_version_id?: string;
+  summary?: string;
+  affected_node_ids?: string[];
+  affected_edge_ids?: string[];
+  tasks?: ImplementationPlanTask[];
+  guardrails?: string[];
+};
+
 export type ImplementationPlan = {
   id: string;
   repository_id: string;
   graph_version_id: string;
+  requested_by: string;
+  approved_by: string | null;
   status: "draft" | "approved" | "pull_request_opened" | "failed";
   change_request: string;
-  plan_json: { tasks?: Array<{ id: string; title: string; path?: string }> };
+  plan_json: ImplementationPlanJson;
   pull_request_url: string | null;
   error: string | null;
+  created_at: string;
+  approved_at: string | null;
+  completed_at: string | null;
 };
 
 export type RepositoryEvent = {
@@ -187,6 +209,26 @@ export function createImplementationPlan(repositoryId: string, changeRequest: st
   return apiRequest<ImplementationPlan>(`/repositories/${repositoryId}/implementation-plans`, {
     method: "POST",
     body: JSON.stringify({ change_request: changeRequest }),
+  });
+}
+
+export function approveImplementationPlan(repositoryId: string, planId: string) {
+  return apiRequest<ImplementationPlan>(`/repositories/${repositoryId}/implementation-plans/${planId}/approve`, {
+    method: "POST",
+  });
+}
+
+export type OpenPullRequestInput = {
+  title: string;
+  body: string;
+  head_branch: string;
+  base_branch: string;
+};
+
+export function openPullRequest(repositoryId: string, planId: string, input: OpenPullRequestInput) {
+  return apiRequest<ImplementationPlan>(`/repositories/${repositoryId}/implementation-plans/${planId}/pull-request`, {
+    method: "POST",
+    body: JSON.stringify(input),
   });
 }
 
