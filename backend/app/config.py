@@ -47,6 +47,14 @@ class Settings(BaseSettings):
     log_level: str = Field(default="INFO", pattern="^(DEBUG|INFO|WARNING|ERROR|CRITICAL)$")
 
     @model_validator(mode="after")
+    def normalize_database_url(self) -> "Settings":
+        if self.database_url and self.database_url.startswith("postgresql://"):
+            self.database_url = self.database_url.replace(
+                "postgresql://", "postgresql+psycopg://", 1
+            )
+        return self
+
+    @model_validator(mode="after")
     def validate_production_secrets(self) -> "Settings":
         if self.environment == "production" and self.jwt_secret.get_secret_value().startswith(
             "development-"

@@ -1,53 +1,56 @@
-# Production deployment: Vercel, Render, and Neo4j Aura
+# Production deployment: Render backend + Vercel frontend
 
-This guide deploys the existing CodeAtlas frontend at Vercel and connects it to a hosted CodeAtlas backend. It is the recommended hosted configuration for the current implementation:
+This guide runs the CodeAtlas backend **entirely on Render's free tier** and connects it to the existing Vercel frontend. It replaces the earlier three-provider layout: everything except Neo4j and the frontend now lives in one Render team, driven by the `render.yaml` Blueprint at the repository root.
 
 | Responsibility | Hosted service |
 | --- | --- |
-| Frontend | Vercel |
-| Public API | Render Web Service |
-| Background scans and graph projection | Render Background Worker |
-| Operational database | Render Postgres with pgvector |
-| Queue, rate limit, and event store | Render Key Value |
-| Architecture Graph | Neo4j AuraDB |
+| Frontend | Vercel (already deployed) |
+| Public API + inline Celery worker | Render Web Service (free) |
+| Operational database | Render Postgres (free) with pgvector |
+| Queue, rate limit, event store | Render Key Value (free) |
+| Architecture Graph | Neo4j AuraDB Free |
 
-The current `docker-compose.yml` is a **local-development stack**. Do not deploy it unchanged: it enables development login, includes development credentials, exposes local Neo4j ports, and does not define production persistence, TLS, or secret management.
+The Celery worker runs **inside the API container** because Render's free tier does not include Background Workers. `CODEATLAS_RUN_INLINE_WORKER=1` in the Blueprint tells `docker/entrypoint.sh` to launch `celery worker` in the background before Uvicorn starts.
+
+The `docker-compose.yml` in the repo is a **local-development stack** — do not deploy it unchanged.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
     Browser["Browser"] --> Vercel["Vercel frontend"]
-    Vercel --> API["Render API"]
+    Vercel --> API["Render Web Service<br/>(FastAPI + inline Celery)"]
     API --> Postgres["Render Postgres + pgvector"]
     API --> Redis["Render Key Value"]
-    API --> Neo4j["Neo4j AuraDB"]
-    Worker["Render Celery worker"] --> Postgres
-    Worker --> Redis
-    Worker --> Neo4j
-    Worker --> GitHub["GitHub API and repositories"]
+    API --> Neo4j["Neo4j AuraDB Free"]
     API --> OpenAI["OpenAI Responses API"]
-    GitHub --> API
+    GitHub["GitHub API + webhooks"] --> API
 ```
 
-Only the Vercel frontend and Render API are public. PostgreSQL, Redis, Neo4j credentials, metrics, and the Celery worker must not be exposed to browsers.
+Only the Vercel frontend and the Render Web Service accept public traffic. Postgres, Key Value, Neo4j credentials, and the inline worker must stay private.
+
+## Free-tier caveats
+
+Understand these before you ship:
+
+- **Cold starts.** The Web Service spins down after ~15 minutes of no HTTP traffic. The first request after a spin-down wakes it in ~30-60 seconds. If a spin-down occurs while a scan is queued in Redis, the inline worker resumes the task only when the next request wakes the service.
+- **Render Postgres Free expires after 90 days.** Plan to upgrade to a paid Postgres plan or dump/restore into a fresh free instance before the expiry.
+- **Key Value Free is ~25 MB.** Enough for the Celery queue and rate-limit counters at demo scale.
+- **Background Workers require a paid plan.** This guide sidesteps that by running the worker inline. If you need durable async processing (multiple replicas, retries surviving restarts), promote the worker to its own Render Background Worker on the Starter plan and set `CODEATLAS_RUN_INLINE_WORKER=0` on the Web Service.
+- **Neo4j Aura Free is always-on** — no cold start — but caps at 200k nodes / 400k relationships. Sufficient for the repositories you are likely to scan on the free tier.
 
 ## Prerequisites
 
-- A deployed Vercel frontend. The current production frontend is `https://code-atlas-ai-henna.vercel.app`.
-- A Render account with access to Web Services, Background Workers, Postgres, and Key Value.
-- A Neo4j AuraDB instance or an equivalent managed Neo4j deployment.
+- A deployed Vercel frontend (e.g. `https://code-atlas-ai-henna.vercel.app`).
+- A Render account with billing set to the free plan.
+- A Neo4j AuraDB Free instance.
 - A GitHub OAuth App and permission to create a repository webhook.
-- An OpenAI API key when model-enhanced architecture chat is required. Without it, CodeAtlas remains available with deterministic graph-backed answers.
-- A repository connected to Render so the API and worker can build from the same commit.
+- An OpenAI API key when AI-enhanced chat is required. Without it, CodeAtlas serves deterministic graph-backed answers.
+- This repository connected to Render (Blueprint requires a linked Git repo).
 
-## 1. Provision data services
+## 1. Provision Neo4j AuraDB Free
 
-Create all data services in the same Render region as the API and worker.
-
-### Neo4j AuraDB
-
-Create an AuraDB instance and copy its connection details into the environment values below. Aura provides a secure `neo4j+s://...` URI, a username, and a password.
+Create an AuraDB Free instance in the region closest to Render's Oregon region. Copy:
 
 ```dotenv
 CODEATLAS_NEO4J_URI=neo4j+s://<instance-id>.databases.neo4j.io
@@ -55,187 +58,156 @@ CODEATLAS_NEO4J_USERNAME=neo4j
 CODEATLAS_NEO4J_PASSWORD=<aura-password>
 ```
 
-Keep the Aura credentials in Render secrets. Do not put them in the Vercel project.
+Keep these in Render only. Do not put them in the Vercel project.
 
-### Render Postgres
+## 2. Apply the Render Blueprint
 
-Create a Render Postgres database. Copy its **internal** connection URL and change only its scheme:
+The repository ships a `render.yaml` at the root that provisions the entire backend in one apply.
 
-```text
-postgresql://...             # value supplied by Render
-postgresql+psycopg://...     # value required by CodeAtlas
-```
+1. In Render, open **New +** -> **Blueprint** and connect this repository.
+2. Render reads `render.yaml` and shows the resources it will create:
+   - `codeatlas-postgres` (Postgres, free, PG 16)
+   - `codeatlas-redis` (Key Value, free)
+   - `codeatlas-api` (Web Service, Docker, free)
+3. Click **Apply**. Render creates all three services in a single environment.
+4. Wait for the initial `codeatlas-api` build. The first deploy runs Alembic (`CODEATLAS_RUN_MIGRATIONS=1`) and then starts Uvicorn plus the inline Celery worker.
 
-Set the second form as `CODEATLAS_DATABASE_URL`. Enable pgvector once using Render's PostgreSQL console or a trusted `psql` connection:
+The Blueprint wires the datastore URLs automatically:
+
+- `CODEATLAS_DATABASE_URL` from `codeatlas-postgres.connectionString`
+- `CODEATLAS_REDIS_URL` from `codeatlas-redis.connectionString`
+- `CODEATLAS_JWT_SECRET` generated by Render
+
+Postgres exposes `connectionString` as `postgresql://...`. The application normalizes that to `postgresql+psycopg://...` on load; no manual editing required.
+
+## 3. Enable pgvector
+
+Once, from the Render Postgres console (or a trusted `psql`):
 
 ```sql
 CREATE EXTENSION IF NOT EXISTS vector;
 ```
 
-### Render Key Value
+The Alembic migrations expect this extension to exist. Run this **before** the first successful deploy, or the migration step will fail and you will need to redeploy.
 
-Create a Render Key Value instance. Copy its internal Redis-compatible URL unchanged into:
+## 4. Fill in the sync:false environment variables
 
-```dotenv
-CODEATLAS_REDIS_URL=<render-key-value-url>
-```
-
-## 2. Create Render production secrets
-
-Create a Render Environment Group named `codeatlas-production`. Link it to both the API and worker, then add the following values.
+The Blueprint declares these with `sync: false`, meaning Render will prompt you (or leave them blank) rather than syncing them from source control. Open the `codeatlas-api` service -> **Environment** and set:
 
 ```dotenv
-CODEATLAS_ENVIRONMENT=production
-CODEATLAS_ALLOWED_ORIGINS=["https://code-atlas-ai-henna.vercel.app"]
 CODEATLAS_WEB_APP_ORIGIN=https://code-atlas-ai-henna.vercel.app
+CODEATLAS_ALLOWED_ORIGINS=["https://code-atlas-ai-henna.vercel.app"]
 
-CODEATLAS_DATABASE_URL=postgresql+psycopg://<user>:<url-encoded-password>@<postgres-host>:5432/<database>
 CODEATLAS_NEO4J_URI=neo4j+s://<instance-id>.databases.neo4j.io
-CODEATLAS_NEO4J_USERNAME=neo4j
 CODEATLAS_NEO4J_PASSWORD=<aura-password>
-CODEATLAS_REDIS_URL=<render-key-value-url>
-
-CODEATLAS_JWT_SECRET=<random-secret>
-CODEATLAS_JWT_ISSUER=codeatlas
-CODEATLAS_JWT_AUDIENCE=codeatlas-web
-CODEATLAS_GITHUB_TOKEN_ENCRYPTION_KEY=<fernet-key>
-CODEATLAS_GITHUB_WEBHOOK_SECRET=<random-secret>
-CODEATLAS_ALLOW_DEVELOPMENT_LOGIN=false
-CODEATLAS_RATE_LIMIT_PER_MINUTE=120
 
 CODEATLAS_GITHUB_CLIENT_ID=<github-oauth-client-id>
 CODEATLAS_GITHUB_CLIENT_SECRET=<github-oauth-client-secret>
 CODEATLAS_GITHUB_OAUTH_REDIRECT_URI=https://<render-api-name>.onrender.com/api/v1/auth/github/callback
+CODEATLAS_GITHUB_WEBHOOK_SECRET=<random-secret>
 
-CODEATLAS_AI_BASE_URL=https://api.openai.com/v1
-CODEATLAS_AI_API_KEY=<openai-api-key>
-CODEATLAS_AI_MODEL=gpt-4.1-mini
-CODEATLAS_AI_KEY_ENCRYPTION_KEY=<fernet-key-for-workspace-byok>
-CODEATLAS_LOG_LEVEL=INFO
+CODEATLAS_GITHUB_TOKEN_ENCRYPTION_KEY=<fernet-key>
+CODEATLAS_AI_KEY_ENCRYPTION_KEY=<fernet-key>
+
+CODEATLAS_AI_API_KEY=<openai-api-key>   # optional
 ```
 
-`CODEATLAS_ALLOWED_ORIGINS` is a JSON array, not a comma-separated string. Use the exact Vercel origin without a trailing slash. If a custom frontend domain is added later, append it to this array and update `CODEATLAS_WEB_APP_ORIGIN` if it becomes the canonical browser origin.
-
-Generate secrets locally, then paste only the generated values into Render:
+`CODEATLAS_ALLOWED_ORIGINS` is a JSON array (no trailing slash). Generate the two secrets and two Fernet keys locally, then paste only the generated values into Render:
 
 ```powershell
-openssl rand -base64 48
+# Random webhook secret
+python -c "import secrets; print(secrets.token_urlsafe(48))"
+# Fernet key
 .\.venv\Scripts\python.exe -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
 
-The production application refuses to start with a development JWT secret, absent PostgreSQL/Neo4j/Redis configuration, a missing GitHub token-encryption key, a missing webhook secret, or a development-login flag.
+The production configuration refuses to start with a development JWT secret, missing Postgres/Neo4j/Redis, missing Fernet keys, missing webhook secret, or `CODEATLAS_ALLOW_DEVELOPMENT_LOGIN=true`. If the boot fails, read the first Pydantic error — it names the missing key.
 
-## 3. Deploy the Render API
+## 5. Verify the API
 
-1. In Render, select **New → Web Service** and connect the CodeAtlas repository.
-2. Set the runtime to **Docker**.
-3. Set **Dockerfile Path** to `docker/Dockerfile.api` and **Root Directory** to `.`.
-4. Set the service port to `8000`; the image already binds Uvicorn to `0.0.0.0:8000`.
-5. Set the health-check path to `/api/v1/ready`.
-6. Link the `codeatlas-production` Environment Group.
-7. For the initial deployment only, add this API-service-specific variable:
-
-   ```dotenv
-   CODEATLAS_RUN_MIGRATIONS=1
-   ```
-
-8. Deploy and wait for the migration log to reach Alembic head.
-
-The API URL will be:
-
-```text
-https://<render-api-name>.onrender.com
-```
-
-Validate it before proceeding:
+The API URL is `https://<render-api-name>.onrender.com`. Confirm:
 
 ```text
 GET https://<render-api-name>.onrender.com/api/v1/health
 GET https://<render-api-name>.onrender.com/api/v1/ready
 ```
 
-Both endpoints must return HTTP 200. After the first successful release, remove `CODEATLAS_RUN_MIGRATIONS` from the API service. For later releases, run `alembic upgrade head` once through a controlled pre-deploy command or a one-off administrative job before rolling API replicas.
+Both must return HTTP 200. After the first successful release, set `CODEATLAS_RUN_MIGRATIONS=0` on the service. For subsequent schema changes, either re-enable the flag for one deploy or run `alembic upgrade head` from a one-off Render Shell before rolling the new image.
 
-## 4. Deploy the Celery worker
+## 6. Configure GitHub OAuth + webhook
 
-1. In Render, select **New → Background Worker** and connect the same repository.
-2. Set the runtime to **Docker**.
-3. Set **Dockerfile Path** to `docker/Dockerfile.api` and **Root Directory** to `.`.
-4. Link the `codeatlas-production` Environment Group.
-5. Set the Docker command to:
-
-   ```text
-   celery -A app.worker.celery_app worker --pool=solo --loglevel=INFO
-   ```
-
-6. Do not configure `CODEATLAS_RUN_MIGRATIONS=1` on the worker.
-7. Deploy and confirm in worker logs that Celery connects to Redis.
-
-The worker needs the database, Neo4j, Redis, and GitHub token-encryption settings because it handles private repository scans and architecture graph projection.
-
-## 5. Configure GitHub OAuth and webhooks
-
-Create or update the GitHub OAuth App:
+GitHub OAuth App:
 
 | Setting | Value |
 | --- | --- |
 | Homepage URL | `https://code-atlas-ai-henna.vercel.app` |
 | Authorization callback URL | `https://<render-api-name>.onrender.com/api/v1/auth/github/callback` |
 
-Create a GitHub webhook for connected repositories:
+Repository webhook:
 
 | Setting | Value |
 | --- | --- |
 | Payload URL | `https://<render-api-name>.onrender.com/api/v1/github/webhooks` |
 | Content type | `application/json` |
-| Secret | The exact `CODEATLAS_GITHUB_WEBHOOK_SECRET` value stored in Render |
+| Secret | The exact `CODEATLAS_GITHUB_WEBHOOK_SECRET` value |
 | Events | Push events |
 
-The GitHub `ping` event should return HTTP 202. CodeAtlas verifies the raw-body `X-Hub-Signature-256` signature before parsing the request, and only queues a scan for eligible default-branch push events.
+GitHub's `ping` event should return HTTP 202. Signature verification runs against the raw body before parsing, and only default-branch pushes queue a scan.
 
-## 6. Connect the Vercel frontend
+## 7. Point the Vercel frontend at Render
 
-In the Vercel project, open **Settings → Environment Variables** and add this Production variable:
+In the Vercel project, **Settings -> Environment Variables**, set for Production:
 
 ```dotenv
 VITE_CODEATLAS_API_URL=https://<render-api-name>.onrender.com
 ```
 
-Redeploy Vercel after saving the variable. Vite injects `VITE_*` values during the frontend build; changing the setting does not alter an existing deployment.
+Redeploy Vercel — Vite injects `VITE_*` values at build time, so an existing deployment will not pick up the change until a redeploy.
 
-The Vercel frontend must not receive any database, Redis, Neo4j, GitHub client-secret, token-encryption, webhook, JWT, or OpenAI API secret. It needs only the public API URL.
+The frontend must not receive any database, Redis, Neo4j, GitHub client secret, token-encryption, webhook, JWT, or OpenAI key. It needs only the public API URL.
 
-## 7. Production acceptance test
+## 8. Acceptance test
 
-1. Open `https://code-atlas-ai-henna.vercel.app`.
+1. Open the Vercel URL.
 2. Open **Settings** and authenticate through GitHub OAuth.
 3. Connect a public GitHub repository.
 4. Trigger a repository scan.
-5. Confirm that the worker completes the scan and a graph version is created.
+5. Watch `codeatlas-api` logs — the inline Celery worker should pick up the task, complete the scan, and produce a graph version.
 6. Open the Architecture page and confirm graph data appears.
 7. Generate a documentation or diagram artifact.
-8. Ask an architecture question and confirm a graph version and citations are returned.
-9. Push a change to the repository default branch and verify the signed GitHub webhook requests a refresh scan.
+8. Ask an architecture question; confirm citations return.
+9. Push to the repo's default branch and confirm the signed webhook triggers a refresh scan.
 
 ## Troubleshooting
 
 | Symptom | Likely cause and resolution |
 | --- | --- |
-| Browser calls `localhost:8000` | `VITE_CODEATLAS_API_URL` is absent or Vercel was not redeployed. |
-| Browser shows a CORS error | Add the exact Vercel origin to `CODEATLAS_ALLOWED_ORIGINS`; do not add a trailing slash. |
-| `/api/v1/ready` returns 503 | Check the Render Postgres URL scheme, Aura URI/credentials, and Render Key Value URL. |
-| API fails on startup | Read the first Pydantic configuration error; production configuration validation identifies the missing required value. |
-| Worker starts but scans do not run | Confirm the worker uses the same `CODEATLAS_REDIS_URL` as the API and that the Celery command matches this guide. |
-| GitHub sign-in fails | Ensure the callback URL exactly matches both GitHub and `CODEATLAS_GITHUB_OAUTH_REDIRECT_URI`. |
-| GitHub webhooks fail | Ensure the webhook payload URL is HTTPS and its secret exactly matches `CODEATLAS_GITHUB_WEBHOOK_SECRET`. |
-| Aura cannot connect | Use the exact `neo4j+s://...` URI copied from Aura and confirm outbound Bolt connectivity is allowed. |
+| Browser calls `localhost:8000` | `VITE_CODEATLAS_API_URL` missing on Vercel, or Vercel not redeployed after setting it. |
+| CORS error in browser | Add the exact Vercel origin to `CODEATLAS_ALLOWED_ORIGINS` (JSON array, no trailing slash). |
+| `/api/v1/ready` returns 503 | Check Aura URI/credentials, Postgres connectionString wired by the Blueprint, and Key Value connectionString. |
+| API fails on startup | Read the first Pydantic error; production validation names the missing required value. |
+| Migration fails on first deploy | Run `CREATE EXTENSION IF NOT EXISTS vector;` on Postgres and redeploy. |
+| Scans queue but never complete | Confirm `CODEATLAS_RUN_INLINE_WORKER=1` is set on `codeatlas-api` and the service is not asleep. |
+| Cold-start latency | Expected on the free plan (~30-60s after 15 min idle). Upgrade the Web Service to Starter to keep it warm. |
+| GitHub sign-in fails | Callback URL must match GitHub and `CODEATLAS_GITHUB_OAUTH_REDIRECT_URI` exactly. |
+| Webhooks fail | Payload URL must be HTTPS and its secret must match `CODEATLAS_GITHUB_WEBHOOK_SECRET`. |
+| Aura cannot connect | Use the exact `neo4j+s://...` URI Aura provides. |
+
+## Promoting off the free tier
+
+When free-tier limits start to bite, the smallest paid upgrades are:
+
+- **Web Service -> Starter** removes cold starts.
+- **Postgres -> Starter** avoids the 90-day expiry and lifts the storage cap.
+- **Split the worker back out** — add a Render Background Worker on Starter that runs `celery -A app.worker.celery_app worker --pool=solo --loglevel=INFO`, share the same environment group, and set `CODEATLAS_RUN_INLINE_WORKER=0` on the Web Service.
+- **Neo4j -> Aura Professional** for larger graphs.
 
 ## Security and operations
 
-- Never commit the Render Environment Group values, Vercel secrets, or Aura credentials.
-- Keep PostgreSQL, Redis, and Neo4j private. Only the API should accept public browser traffic.
+- Never commit Render env values, Vercel secrets, or Aura credentials.
+- Keep Postgres, Key Value, and Neo4j private. Only the Web Service accepts public browser traffic.
 - Restrict `/metrics` to monitoring infrastructure.
-- Back up PostgreSQL before schema-changing releases and retain Neo4j Aura snapshots.
+- Back up Postgres before schema-changing releases and retain Aura snapshots.
 - Monitor readiness failures, API 5xx rates, Celery retry growth, scan failures, Neo4j connectivity, and OpenAI API failures.
 - Build and test each release before deployment:
 
@@ -244,7 +216,3 @@ The Vercel frontend must not receive any database, Redis, Neo4j, GitHub client-s
   uv run pytest backend/tests
   docker build -f docker/Dockerfile.api -t codeatlas-api:ci .
   ```
-
-## Future production infrastructure
-
-The repository does not yet contain a Render Blueprint, Terraform/Bicep, Kubernetes manifests, Helm chart, or a provider-specific frontend configuration file. Those should be added before moving from the recommended managed-service setup to a repeatable multi-environment enterprise deployment.
