@@ -8,7 +8,7 @@ from redis.asyncio import Redis
 from app.config import get_settings
 from app.database import create_session_factory
 from app.events import repository_channel
-from app.modules.authentication.service import AuthenticationService
+from app.modules.authentication.bearer import resolve_bearer_from_token
 from app.modules.repository.repository import RepositoryStore
 
 router = APIRouter(tags=["repository-events"])
@@ -22,9 +22,9 @@ async def repository_events(websocket: WebSocket, repository_id: UUID) -> None:
         await websocket.close(code=1008)
         return
     try:
-        claims = AuthenticationService(None, settings).decode_access_token(token)
         session_factory = create_session_factory(settings.database_url)
         async with session_factory() as session:
+            claims = await resolve_bearer_from_token(token, session, settings)
             repository = await RepositoryStore(session).get(repository_id, UUID(claims["org"]))
         if repository is None:
             await websocket.close(code=1008)

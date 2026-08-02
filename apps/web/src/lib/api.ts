@@ -261,3 +261,34 @@ export function updateWorkspace(input: { name: string; slug: string }) {
     body: JSON.stringify(input),
   });
 }
+
+export type PersonalAccessTokenSummary = {
+  id: string;
+  name: string;
+  prefix: string;
+  created_at: string;
+  expires_at: string | null;
+  last_used_at: string | null;
+};
+
+export type CreatedPersonalAccessToken = PersonalAccessTokenSummary & {
+  token: string;
+};
+
+export function listMcpTokens() {
+  return apiRequest<PersonalAccessTokenSummary[]>("/mcp/tokens");
+}
+
+export function createMcpToken(input: { name: string; expires_in_days?: number | null }) {
+  return apiRequest<CreatedPersonalAccessToken>("/mcp/tokens", {
+    method: "POST",
+    body: JSON.stringify({
+      name: input.name,
+      expires_in_days: input.expires_in_days ?? null,
+    }),
+  });
+}
+
+export function revokeMcpToken(tokenId: string) {
+  return apiRequest<void>(`/mcp/tokens/${tokenId}`, { method: "DELETE" });
+}

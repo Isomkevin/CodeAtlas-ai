@@ -5,11 +5,11 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import HTMLResponse
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings, get_settings
 from app.database import get_session
+from app.modules.authentication.bearer import bearer_scheme, resolve_bearer_claims
 from app.modules.authentication.repository import AuthenticationRepository
 from app.modules.authentication.models import MembershipRole
 from app.modules.authentication.schemas import (
@@ -22,17 +22,14 @@ from app.modules.authentication.schemas import (
 from app.modules.authentication.service import AuthenticationService
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
-bearer_scheme = HTTPBearer(auto_error=True)
 
 
 def require_workspace_role(*permitted: MembershipRole):
     """Authorize workspace settings without importing the downstream dependency module."""
 
     async def authorize(
-        credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
-        service: AuthenticationService = Depends(get_authentication_service),
+        claims: dict[str, str] = Depends(resolve_bearer_claims),
     ) -> dict[str, str]:
-        claims = service.decode_access_token(credentials.credentials)
         if MembershipRole(claims["role"]) not in permitted:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient organization role")
         return claims
@@ -98,10 +95,9 @@ async def development_session(
 
 @router.get("/session/claims", summary="Validate the current bearer token")
 async def session_claims(
-    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
-    service: AuthenticationService = Depends(get_authentication_service),
+    claims: dict[str, str] = Depends(resolve_bearer_claims),
 ) -> dict[str, str | int]:
-    return service.decode_access_token(credentials.credentials)
+    return claims
 
 
 def _workspace_response(organization, role: str) -> WorkspaceResponse:
