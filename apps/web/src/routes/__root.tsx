@@ -9,6 +9,8 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 import { AppShell } from "@/components/app-shell";
 import { CommandPaletteProvider } from "@/components/command-palette";
 import { Toaster } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { UIStateProvider } from "@/lib/ui-state";
 
 function NotFoundComponent() {
   return (
@@ -95,12 +97,16 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   return (
     <QueryClientProvider client={queryClient}>
-      <CommandPaletteProvider>
-        <AppShell>
-          <Outlet />
-        </AppShell>
-        <Toaster />
-      </CommandPaletteProvider>
+      <TooltipProvider delayDuration={100}>
+        <UIStateProvider>
+          <CommandPaletteProvider>
+            <AppShell>
+              <Outlet />
+            </AppShell>
+            <Toaster />
+          </CommandPaletteProvider>
+        </UIStateProvider>
+      </TooltipProvider>
     </QueryClientProvider>
   );
 }
