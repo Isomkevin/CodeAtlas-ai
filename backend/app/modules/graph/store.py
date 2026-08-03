@@ -6,6 +6,7 @@ from uuid import UUID
 from neo4j import AsyncDriver
 
 from app.modules.graph.models import GraphEdge, GraphNode
+from app.modules.graph.retry import with_wake_retry
 
 
 class Neo4jGraphStore:
@@ -15,12 +16,15 @@ class Neo4jGraphStore:
         self._driver = driver
 
     async def ensure_schema(self) -> None:
-        async with self._driver.session() as session:
-            result = await session.run(
-                "CREATE CONSTRAINT architecture_node_identity IF NOT EXISTS "
-                "FOR (node:ArchitectureNode) REQUIRE (node.version_id, node.id) IS UNIQUE"
-            )
-            await result.consume()
+        async def _op() -> None:
+            async with self._driver.session() as session:
+                result = await session.run(
+                    "CREATE CONSTRAINT architecture_node_identity IF NOT EXISTS "
+                    "FOR (node:ArchitectureNode) REQUIRE (node.version_id, node.id) IS UNIQUE"
+                )
+                await result.consume()
+
+        await with_wake_retry(_op, label="ensure_schema")
 
     async def write_version(
         self,
@@ -49,55 +53,68 @@ class Neo4jGraphStore:
             }
             for edge in edges
         ]
-        async with self._driver.session() as session:
-            if node_rows:
-                result = await session.run(
-                    "UNWIND $nodes AS node "
-                    "MERGE (target:ArchitectureNode {version_id: $version_id, id: node.id}) "
-                    "SET target.repository_id = $repository_id, target.kind = node.kind, "
-                    "target.name = node.name "
-                    "SET target += node.properties",
-                    nodes=node_rows,
-                    version_id=version,
-                    repository_id=repository,
-                )
-                await result.consume()
-            if edge_rows:
-                result = await session.run(
-                    "UNWIND $edges AS edge "
-                    "MATCH (source:ArchitectureNode {version_id: $version_id, id: edge.source_id}) "
-                    "MATCH (target:ArchitectureNode {version_id: $version_id, id: edge.target_id}) "
-                    "MERGE (source)-[relationship:RELATES_TO "
-                    "{version_id: $version_id, id: edge.id}]->(target) "
-                    "SET relationship.kind = edge.kind, "
-                    "relationship.repository_id = $repository_id",
-                    edges=edge_rows,
-                    version_id=version,
-                    repository_id=repository,
-                )
-                await result.consume()
+
+        async def _op() -> None:
+            async with self._driver.session() as session:
+                if node_rows:
+                    result = await session.run(
+                        "UNWIND $nodes AS node "
+                        "MERGE (target:ArchitectureNode {version_id: $version_id, id: node.id}) "
+                        "SET target.repository_id = $repository_id, target.kind = node.kind, "
+                        "target.name = node.name "
+                        "SET target += node.properties",
+                        nodes=node_rows,
+                        version_id=version,
+                        repository_id=repository,
+                    )
+                    await result.consume()
+                if edge_rows:
+                    result = await session.run(
+                        "UNWIND $edges AS edge "
+                        "MATCH (source:ArchitectureNode "
+                        "{version_id: $version_id, id: edge.source_id}) "
+                        "MATCH (target:ArchitectureNode "
+                        "{version_id: $version_id, id: edge.target_id}) "
+                        "MERGE (source)-[relationship:RELATES_TO "
+                        "{version_id: $version_id, id: edge.id}]->(target) "
+                        "SET relationship.kind = edge.kind, "
+                        "relationship.repository_id = $repository_id",
+                        edges=edge_rows,
+                        version_id=version,
+                        repository_id=repository,
+                    )
+                    await result.consume()
+
+        await with_wake_retry(_op, label="write_version")
 
     async def read_version(self, version_id: UUID) -> tuple[list[GraphNode], list[GraphEdge]]:
         version = str(version_id)
-        async with self._driver.session() as session:
-            node_result = await session.run(
-                "MATCH (node:ArchitectureNode {version_id: $version_id}) "
-                "RETURN node.id AS id, node.kind AS kind, node.name AS name, "
-                "node.repository_id AS repository_id, properties(node) AS properties "
-                "ORDER BY node.kind, node.name, node.id",
-                version_id=version,
-            )
-            node_records = [record async for record in node_result]
-            edge_result = await session.run(
-                "MATCH (source:ArchitectureNode {version_id: $version_id})"
-                "-[relationship:RELATES_TO {version_id: $version_id}]->"
-                "(target:ArchitectureNode {version_id: $version_id}) "
-                "RETURN relationship.id AS id, source.id AS source_id, target.id AS target_id, "
-                "relationship.kind AS kind, relationship.repository_id AS repository_id "
-                "ORDER BY relationship.kind, relationship.id",
-                version_id=version,
-            )
-            edge_records = [record async for record in edge_result]
+
+        async def _op() -> tuple[list, list]:
+            async with self._driver.session() as session:
+                node_result = await session.run(
+                    "MATCH (node:ArchitectureNode {version_id: $version_id}) "
+                    "RETURN node.id AS id, node.kind AS kind, node.name AS name, "
+                    "node.repository_id AS repository_id, properties(node) AS properties "
+                    "ORDER BY node.kind, node.name, node.id",
+                    version_id=version,
+                )
+                node_records_local = [record async for record in node_result]
+                edge_result = await session.run(
+                    "MATCH (source:ArchitectureNode {version_id: $version_id})"
+                    "-[relationship:RELATES_TO {version_id: $version_id}]->"
+                    "(target:ArchitectureNode {version_id: $version_id}) "
+                    "RETURN relationship.id AS id, source.id AS source_id, "
+                    "target.id AS target_id, "
+                    "relationship.kind AS kind, "
+                    "relationship.repository_id AS repository_id "
+                    "ORDER BY relationship.kind, relationship.id",
+                    version_id=version,
+                )
+                edge_records_local = [record async for record in edge_result]
+                return node_records_local, edge_records_local
+
+        node_records, edge_records = await with_wake_retry(_op, label="read_version")
         return (
             [
                 GraphNode(

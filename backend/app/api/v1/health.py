@@ -59,6 +59,41 @@ it); Neo4j Aura Free hibernates on idle and would otherwise block every
 Render redeploy indefinitely."""
 
 
+class WarmResponse(BaseModel):
+    status: str
+    dependencies: dict[str, str]
+
+
+@router.get("/warm", response_model=WarmResponse, summary="Keep-warm probe")
+async def warm(settings: Settings = Depends(get_settings)) -> WarmResponse:
+    """Ping every dep. Always return 200. Intended for a cron/uptime monitor
+    that keeps Render awake and Aura Free out of hibernation.
+
+    Unlike `/ready`, this endpoint *never* fails — it just reports per-dep
+    status. That way an external monitor gets a stable HTTP 200 heartbeat
+    (green in dashboards) even when Aura is momentarily unavailable during
+    resume, while still exercising the driver to wake it up."""
+
+    statuses: dict[str, str] = {}
+    probes = []
+    if settings.database_url:
+        probes.append(("postgres", _check_postgres))
+    if settings.redis_url:
+        probes.append(("redis", _check_redis))
+    if settings.neo4j_uri:
+        probes.append(("neo4j", _check_neo4j))
+
+    for name, probe in probes:
+        try:
+            await probe(settings)
+            statuses[name] = "ok"
+        except Exception as error:
+            statuses[name] = f"{type(error).__name__}: {error}"
+            logger.info("warm_dep_unavailable", dependency=name, error=str(error))
+
+    return WarmResponse(status="warm", dependencies=statuses)
+
+
 @router.get("/ready", response_model=HealthResponse, summary="Readiness probe")
 async def ready(settings: Settings = Depends(get_settings)) -> HealthResponse:
     """Confirm the API can start serving requests.
