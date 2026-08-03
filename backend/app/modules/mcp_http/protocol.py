@@ -54,10 +54,14 @@ async def dispatch(message: dict[str, Any], context: ToolContext) -> dict[str, A
             return _result(
                 message_id, {"content": [{"type": "text", "text": json.dumps(output)}]}
             )
-        except (RuntimeError, ValueError) as error:
+        except Exception as error:  # noqa: BLE001 — surface every failure as an MCP tool error
+            # Backend deps (Neo4j hibernation, Postgres blip, etc.) should render to the
+            # client as `isError: true` with a readable message so the coding agent can
+            # continue rather than treating it as a JSON-RPC protocol failure.
+            message_text = f"{type(error).__name__}: {error}"
             return _result(
                 message_id,
-                {"content": [{"type": "text", "text": str(error)}], "isError": True},
+                {"content": [{"type": "text", "text": message_text}], "isError": True},
             )
 
     return _error(message_id, -32601, f"Method not found: {method}")
