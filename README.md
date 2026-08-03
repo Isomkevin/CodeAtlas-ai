@@ -20,6 +20,22 @@ CodeAtlas becomes the source of truth for software architecture.
 
 Read the complete [OpenAI Build Week Challenge project narrative](docs/00-overview/hackathon-submission.md), including the problem, implementation, challenges, learnings, and roadmap.
 
+**Judges:** the evaluation guide with live URLs, the 10-minute test recipe, and the MCP setup walkthrough lives at [issue #1](../../issues/1) (pinned).
+
+## How we built this with Codex
+
+CodeAtlas was built primarily inside a single Codex thread. Codex + GPT-5.6 scaffolded and iterated on:
+
+- **The FastAPI monolith** — identity (JWT + GitHub OAuth + RBAC), repository ingestion + Celery scan pipeline, canonical Architecture Graph projection, artifact generation (Markdown / Mermaid / Draw.io / C4), approval-gated implementation plans, GitHub PR creation, and the workspace BYOK provider path.
+- **The MCP integration surface** — the stdio bridge (`backend/app/mcp_server.py`), the Streamable HTTP transport at `/api/v1/mcp` (`backend/app/modules/mcp_http/`), and the personal access token flow (`backend/app/modules/mcp_tokens/`, alembic migration `20260802_01`).
+- **The React/TanStack frontend** — the workspace-aware app shell, retractable sidebars, architecture graph focus mode, the implementation planner UX with approve + open-PR + copy-MCP-prompt actions, and the Agents page with in-app HTTP + stdio MCP setup instructions.
+- **Operational glue** — the `render.yaml` Blueprint, alembic migrations, inline Celery worker toggle, `/warm` keep-alive endpoint + Aura wake retry, and the `docs/07-mcp/client-setup.md` walkthrough.
+
+- **Codex Session ID:** `019f80d5-58a2-70e0-ba16-54df678fecea`
+- Architectural rationale + full narrative: [`docs/00-overview/hackathon-submission.md`](docs/00-overview/hackathon-submission.md)
+
+At runtime, the AI layer uses the OpenAI Responses API with the versioned Architecture Graph as grounded context — CodeAtlas deliberately keeps AI downstream of parsing and graph construction, so responses stay explainable and traceable to a specific graph version.
+
 ## Core Capabilities
 
 - Repository Analysis
