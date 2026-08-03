@@ -37,7 +37,7 @@ Understand these before you ship:
 - **Render Postgres Free expires after 90 days.** Plan to upgrade to a paid Postgres plan or dump/restore into a fresh free instance before the expiry.
 - **Key Value Free is ~25 MB.** Enough for the Celery queue and rate-limit counters at demo scale.
 - **Background Workers require a paid plan.** This guide sidesteps that by running the worker inline. If you need durable async processing (multiple replicas, retries surviving restarts), promote the worker to its own Render Background Worker on the Starter plan and set `CODEATLAS_RUN_INLINE_WORKER=0` on the Web Service.
-- **Neo4j Aura Free is always-on** — no cold start — but caps at 200k nodes / 400k relationships. Sufficient for the repositories you are likely to scan on the free tier.
+- **Neo4j Aura Free hibernates on 3-day idle**, and returns transient `Neo.ClientError.Security.Unauthorized` during resume. CodeAtlas mitigates this two ways: (a) the Neo4j graph driver retries auth errors with 2s / 5s / 10s backoff, (b) `/api/v1/warm` exercises Neo4j so an external uptime monitor keeps Aura alive. Neo4j is a **soft** dependency in `/api/v1/ready` — Postgres and Redis are hard-required, but Aura hibernation cannot block a redeploy. Aura Free is capped at 200k nodes / 400k relationships.
 
 ## Prerequisites
 
@@ -80,17 +80,7 @@ The Blueprint wires the datastore URLs automatically:
 
 Postgres exposes `connectionString` as `postgresql://...`. The application normalizes that to `postgresql+psycopg://...` on load; no manual editing required.
 
-## 3. Enable pgvector
-
-Once, from the Render Postgres console (or a trusted `psql`):
-
-```sql
-CREATE EXTENSION IF NOT EXISTS vector;
-```
-
-The Alembic migrations expect this extension to exist. Run this **before** the first successful deploy, or the migration step will fail and you will need to redeploy.
-
-## 4. Fill in the sync:false environment variables
+## 3. Fill in the sync:false environment variables
 
 The Blueprint declares these with `sync: false`, meaning Render will prompt you (or leave them blank) rather than syncing them from source control. Open the `codeatlas-api` service -> **Environment** and set:
 
@@ -123,18 +113,23 @@ python -c "import secrets; print(secrets.token_urlsafe(48))"
 
 The production configuration refuses to start with a development JWT secret, missing Postgres/Neo4j/Redis, missing Fernet keys, missing webhook secret, or `CODEATLAS_ALLOW_DEVELOPMENT_LOGIN=true`. If the boot fails, read the first Pydantic error — it names the missing key.
 
-## 5. Verify the API
+## 4. Verify the API
 
 The API URL is `https://<render-api-name>.onrender.com`. Confirm:
 
 ```text
 GET https://<render-api-name>.onrender.com/api/v1/health
 GET https://<render-api-name>.onrender.com/api/v1/ready
+GET https://<render-api-name>.onrender.com/api/v1/warm
 ```
 
-Both must return HTTP 200. After the first successful release, set `CODEATLAS_RUN_MIGRATIONS=0` on the service. For subsequent schema changes, either re-enable the flag for one deploy or run `alembic upgrade head` from a one-off Render Shell before rolling the new image.
+- `/health` — liveness (200 as long as the process is running).
+- `/ready` — 200 if Postgres and Redis are reachable. Neo4j is soft; its status is only logged.
+- `/warm` — **always** returns 200 with a per-dep status. This is the endpoint your uptime monitor should hit; the body body reports which deps are green.
 
-## 6. Configure GitHub OAuth + webhook
+After the first successful release, set `CODEATLAS_RUN_MIGRATIONS=0` on the service. For subsequent schema changes, either re-enable the flag for one deploy or run `alembic upgrade head` from a one-off Render Shell before rolling the new image.
+
+## 5. Configure GitHub OAuth + webhook
 
 GitHub OAuth App:
 
@@ -154,7 +149,7 @@ Repository webhook:
 
 GitHub's `ping` event should return HTTP 202. Signature verification runs against the raw body before parsing, and only default-branch pushes queue a scan.
 
-## 7. Point the Vercel frontend at Render
+## 6. Point the Vercel frontend at Render
 
 In the Vercel project, **Settings -> Environment Variables**, set for Production:
 
@@ -166,17 +161,37 @@ Redeploy Vercel — Vite injects `VITE_*` values at build time, so an existing d
 
 The frontend must not receive any database, Redis, Neo4j, GitHub client secret, token-encryption, webhook, JWT, or OpenAI key. It needs only the public API URL.
 
-## 8. Acceptance test
+## 7. Set up the keep-warm cron
+
+Register an external uptime monitor (UptimeRobot, cron-job.org, or similar) to hit `/api/v1/warm` every **5 minutes**. This does two things at once:
+
+- Keeps the Render Web Service out of the 15-minute idle spin-down.
+- Exercises the Neo4j driver so Aura Free never accumulates enough idle to hibernate.
+
+UptimeRobot's free tier supports 5-minute intervals with unlimited HTTP monitors.
+
+## 8. Wire the MCP coding bridge (optional but recommended)
+
+CodeAtlas ships MCP for Cursor / Claude Desktop / Claude Code / OpenClaw over two transports:
+
+- **Streamable HTTP** at `POST /api/v1/mcp` — remote, no client install. Authenticate with a **Personal Access Token** (`cak_...`) minted in the UI at Settings → Agents.
+- **Local stdio** (`app.mcp_server`) — same tools, fallback for offline development.
+
+Full walkthrough: [MCP client setup](../07-mcp/client-setup.md). PATs live in the `mcp_personal_access_tokens` table created by alembic migration `20260802_01`; they are SHA-256 hashed at rest and can be revoked from the same UI.
+
+## 9. Acceptance test
 
 1. Open the Vercel URL.
-2. Open **Settings** and authenticate through GitHub OAuth.
+2. Sign in with GitHub OAuth.
 3. Connect a public GitHub repository.
 4. Trigger a repository scan.
 5. Watch `codeatlas-api` logs — the inline Celery worker should pick up the task, complete the scan, and produce a graph version.
 6. Open the Architecture page and confirm graph data appears.
 7. Generate a documentation or diagram artifact.
 8. Ask an architecture question; confirm citations return.
-9. Push to the repo's default branch and confirm the signed webhook triggers a refresh scan.
+9. Create an implementation plan → approve → **Open pull request…** and confirm the PR appears on GitHub.
+10. Go to Settings → Agents → **Generate MCP token** → run the copied config against Cursor or `claude mcp add`; verify `get_architecture_graph` returns real graph data.
+11. Push to the repo's default branch and confirm the signed webhook triggers a refresh scan.
 
 ## Troubleshooting
 
@@ -184,14 +199,16 @@ The frontend must not receive any database, Redis, Neo4j, GitHub client secret, 
 | --- | --- |
 | Browser calls `localhost:8000` | `VITE_CODEATLAS_API_URL` missing on Vercel, or Vercel not redeployed after setting it. |
 | CORS error in browser | Add the exact Vercel origin to `CODEATLAS_ALLOWED_ORIGINS` (JSON array, no trailing slash). |
-| `/api/v1/ready` returns 503 | Check Aura URI/credentials, Postgres connectionString wired by the Blueprint, and Key Value connectionString. |
+| `/api/v1/ready` returns 503 | Postgres or Redis unreachable. Neo4j alone will NOT cause a 503 — its status is only logged. Check Blueprint-wired connectionStrings first. |
+| `/api/v1/warm` reports `neo4j: AuthError` | Aura is either paused or the password rotated. Resume the instance or reset the password on the Aura console and update `CODEATLAS_NEO4J_PASSWORD`. |
+| MCP tool returns `isError` with a Neo4j auth message | Same cause as above. The bridge already retries 2s / 5s / 10s before surfacing; sustained failure means credentials, not hibernation. |
 | API fails on startup | Read the first Pydantic error; production validation names the missing required value. |
-| Migration fails on first deploy | Run `CREATE EXTENSION IF NOT EXISTS vector;` on Postgres and redeploy. |
 | Scans queue but never complete | Confirm `CODEATLAS_RUN_INLINE_WORKER=1` is set on `codeatlas-api` and the service is not asleep. |
-| Cold-start latency | Expected on the free plan (~30-60s after 15 min idle). Upgrade the Web Service to Starter to keep it warm. |
+| Cold-start latency | Expected on the free plan (~30-60s after 15 min idle). Set up the `/warm` uptime monitor (step 7) to eliminate it, or upgrade the Web Service to Starter. |
 | GitHub sign-in fails | Callback URL must match GitHub and `CODEATLAS_GITHUB_OAUTH_REDIRECT_URI` exactly. |
 | Webhooks fail | Payload URL must be HTTPS and its secret must match `CODEATLAS_GITHUB_WEBHOOK_SECRET`. |
-| Aura cannot connect | Use the exact `neo4j+s://...` URI Aura provides. |
+| Aura cannot connect | Use the exact `neo4j+s://...` URI Aura provides — Aura sometimes rotates the URI hostname when resumed from long pauses. |
+| Deploys keep failing on Neo4j auth | The `/ready` probe used to require Neo4j and killed every deploy while Aura was asleep. That is fixed: Neo4j is a soft dep. If you still see the failure, your `codeatlas-api` deploy predates `feat(health): Neo4j is a soft dep in /ready`. |
 
 ## Promoting off the free tier
 
