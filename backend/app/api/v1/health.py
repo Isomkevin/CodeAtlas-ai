@@ -52,33 +52,47 @@ async def _check_redis(settings: Settings) -> None:
         await redis.aclose()
 
 
+HARD_DEPENDENCIES = ("postgres", "redis")
+"""Deps that must be reachable at startup — the API cannot serve identity or
+scan events without them. Neo4j is a soft dep (only the graph endpoint uses
+it); Neo4j Aura Free hibernates on idle and would otherwise block every
+Render redeploy indefinitely."""
+
+
 @router.get("/ready", response_model=HealthResponse, summary="Readiness probe")
 async def ready(settings: Settings = Depends(get_settings)) -> HealthResponse:
-    """Confirm that the API has completed startup.
+    """Confirm the API can start serving requests.
 
-    Each configured durable dependency is probed independently so the response
-    names the specific dep that is unavailable; a swallowed exception hides
-    which one failed and makes deploy triage impossible.
+    Hard deps (Postgres + Redis) must be reachable. Soft deps (Neo4j) are
+    probed for logging but their failure does not fail readiness — the graph
+    endpoint will surface the outage where the user actually needs graph data.
     """
 
-    probes = []
+    probes: list[tuple[str, callable]] = []
     if settings.database_url:
         probes.append(("postgres", _check_postgres))
-    if settings.neo4j_uri:
-        probes.append(("neo4j", _check_neo4j))
     if settings.redis_url:
         probes.append(("redis", _check_redis))
+    if settings.neo4j_uri:
+        probes.append(("neo4j", _check_neo4j))
 
-    failures: dict[str, str] = {}
+    hard_failures: dict[str, str] = {}
+    soft_failures: dict[str, str] = {}
     for name, probe in probes:
         try:
             await probe(settings)
         except Exception as error:
-            failures[name] = f"{type(error).__name__}: {error}"
+            detail = f"{type(error).__name__}: {error}"
             logger.warning("readiness_dependency_unavailable", dependency=name, error=str(error))
+            if name in HARD_DEPENDENCIES:
+                hard_failures[name] = detail
+            else:
+                soft_failures[name] = detail
 
-    if failures:
-        raise HTTPException(status_code=503, detail={"unavailable": failures})
+    if hard_failures:
+        raise HTTPException(status_code=503, detail={"unavailable": hard_failures})
+    if soft_failures:
+        logger.info("readiness_soft_deps_unavailable", unavailable=list(soft_failures.keys()))
     return HealthResponse(
         status="ready", service=settings.app_name, environment=settings.environment
     )
