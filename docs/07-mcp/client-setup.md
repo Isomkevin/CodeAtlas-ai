@@ -108,7 +108,36 @@ openclaw mcp doctor codeatlas --probe
 
 ---
 
-## 3. Local stdio setup (advanced)
+## 3. Legacy SSE setup (only if your client requires the 2024-11-05 transport)
+
+Modern MCP clients — Cursor, Claude Desktop 0.7+, Claude Code with `--transport http`, OpenClaw — all support the Streamable HTTP transport above and should use it. Use this SSE compat path only if your client explicitly requires the older two-endpoint pattern.
+
+Two endpoints are involved:
+
+- `GET https://codeatlas-api-r0e9.onrender.com/api/v1/mcp/sse` — open with `Authorization: Bearer <cak-token>` **or** append `?access_token=<cak-token>` for EventSource clients that can't attach headers.
+- `POST https://codeatlas-api-r0e9.onrender.com/api/v1/mcp/messages?session_id=<id>` — the endpoint URL is delivered to the client in the first SSE `endpoint` event; the client does not compose it by hand.
+
+Manually verify the transport with `curl`:
+
+```bash
+curl -N -H "Authorization: Bearer <cak-token>" \
+  https://codeatlas-api-r0e9.onrender.com/api/v1/mcp/sse
+```
+
+Expected: an EventStream that starts with:
+
+```
+event: endpoint
+data: /api/v1/mcp/messages?session_id=<hex>
+```
+
+Then, in another terminal, POST a JSON-RPC message to the URL from the `data:` line. The response arrives back on the SSE stream as `event: message`.
+
+Client-specific SSE configuration varies. Consult your client's docs.
+
+---
+
+## 4. Local stdio setup (advanced)
 
 Use this if you're developing CodeAtlas locally, or your MCP client doesn't support HTTP transport.
 
@@ -187,7 +216,7 @@ openclaw mcp doctor codeatlas --probe
 
 ---
 
-## 4. Try it end-to-end
+## 5. Try it end-to-end
 
 Once configured (either transport), ask your agent:
 
@@ -203,7 +232,7 @@ The agent should call `create_implementation_plan`. Head back to CodeAtlas → *
 
 ---
 
-## 5. Troubleshooting
+## 6. Troubleshooting
 
 ### "Personal access token is invalid or revoked"
 
@@ -256,7 +285,7 @@ The PAT carries your CodeAtlas workspace role. If the API returns 403 on `get_ar
 
 ---
 
-## 6. Security notes
+## 7. Security notes
 
 - **Treat a PAT like a password.** It carries your workspace role and doesn't require any second factor.
 - **Never commit a PAT.** Don't put it in `.mcp.json`, `.cursor/mcp.json`, or any other file that might land in git. Use user-scope config files.

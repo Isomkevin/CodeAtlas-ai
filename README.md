@@ -44,20 +44,20 @@ The core bet: AI is more useful when it reasons over a structured, versioned mod
 
 ```mermaid
 flowchart LR
-  User([Developer])
-  Judge([Judge / evaluator])
-  Vercel[Vercel<br/>React + TanStack]
-  API[Render Web Service<br/>FastAPI + inline Celery]
-  Postgres[(Postgres<br/>+ operational data)]
-  Redis[(Key Value<br/>queue + pubsub)]
-  Neo4j[(Neo4j Aura<br/>architecture graph)]
-  GitHub[(GitHub<br/>OAuth + PR API)]
-  Agent[Cursor · Claude Code<br/>Claude Desktop · OpenClaw]
+  User(["Developer"])
+  Judge(["Judge / evaluator"])
+  Vercel["Vercel<br/>React + TanStack"]
+  API["Render Web Service<br/>FastAPI + inline Celery"]
+  Postgres[("Postgres<br/>+ operational data")]
+  Redis[("Key Value<br/>queue + pubsub")]
+  Neo4j[("Neo4j Aura<br/>architecture graph")]
+  GitHub[("GitHub<br/>OAuth + PR API")]
+  Agent["Cursor · Claude Code<br/>Claude Desktop · OpenClaw"]
 
   User -->|HTTPS| Vercel
   Judge -->|HTTPS| Vercel
   Vercel -->|REST + WebSocket| API
-  Agent -->|MCP over HTTP<br/>PAT auth| API
+  Agent -->|"MCP over HTTP<br/>PAT auth"| API
   API --> Postgres
   API --> Redis
   API --> Neo4j
