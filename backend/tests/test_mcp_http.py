@@ -1,8 +1,7 @@
 """HTTP MCP protocol path — no auth, just the dispatch layer."""
 
-from types import SimpleNamespace
-
 import asyncio
+from types import SimpleNamespace
 
 from app.modules.mcp_http.protocol import dispatch
 
@@ -64,7 +63,12 @@ def _context(allowed: bool = True):
 def test_initialize_returns_server_info() -> None:
     response = asyncio.run(
         dispatch(
-            {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2024-11-05"}},
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {"protocolVersion": "2024-11-05"},
+            },
             _context(),
         )
     )

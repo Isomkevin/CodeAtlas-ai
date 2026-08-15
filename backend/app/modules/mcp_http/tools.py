@@ -59,6 +59,12 @@ async def _authorized_repository_id(context: ToolContext, repository_id_raw: str
     return repository_id
 
 
+def _optional_uuid(value: object) -> UUID | None:
+    """Convert an optional UUID argument supplied through the MCP protocol."""
+
+    return UUID(value) if isinstance(value, str) and value else None
+
+
 async def call_tool(name: str, arguments: dict, context: ToolContext) -> dict:
     if not isinstance(arguments, dict):
         raise ValueError("arguments must be an object")
@@ -69,7 +75,7 @@ async def call_tool(name: str, arguments: dict, context: ToolContext) -> dict:
 
     if name == "get_architecture_graph":
         version_id_raw = arguments.get("graph_version_id")
-        version_id = UUID(version_id_raw) if isinstance(version_id_raw, str) and version_id_raw else None
+        version_id = _optional_uuid(version_id_raw)
         try:
             version, nodes, edges = await context.graph_service.read_graph(
                 repository_id, version_id
@@ -103,7 +109,7 @@ async def call_tool(name: str, arguments: dict, context: ToolContext) -> dict:
         if MembershipRole(context.claims["role"]) not in list(MembershipRole):
             raise RuntimeError("Insufficient workspace role")
         version_id_raw = arguments.get("graph_version_id")
-        version_id = UUID(version_id_raw) if isinstance(version_id_raw, str) and version_id_raw else None
+        version_id = _optional_uuid(version_id_raw)
         try:
             plan = await context.implementation_service.create_plan(
                 repository_id,

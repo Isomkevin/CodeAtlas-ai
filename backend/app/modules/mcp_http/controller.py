@@ -17,7 +17,9 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.database import get_session
 from app.modules.authentication.bearer import resolve_bearer_claims
 from app.modules.graph.controller import get_graph_service
 from app.modules.graph.service import GraphService
@@ -26,8 +28,6 @@ from app.modules.implementation.service import ImplementationService
 from app.modules.mcp_http.protocol import dispatch
 from app.modules.mcp_http.tools import ToolContext
 from app.modules.repository.repository import RepositoryStore
-from app.database import get_session
-from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/mcp", tags=["mcp"])
 

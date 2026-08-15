@@ -117,8 +117,10 @@ async def sse_stream(
             yield f"event: endpoint\ndata: {endpoint_url}\n\n"
             while True:
                 try:
-                    payload = await asyncio.wait_for(session.queue.get(), timeout=_KEEPALIVE_SECONDS)
-                except asyncio.TimeoutError:
+                    payload = await asyncio.wait_for(
+                        session.queue.get(), timeout=_KEEPALIVE_SECONDS
+                    )
+                except TimeoutError:
                     if await request.is_disconnected():
                         break
                     yield ": ping\n\n"

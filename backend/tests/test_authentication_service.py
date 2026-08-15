@@ -97,3 +97,67 @@ def test_github_sign_in_provisions_owner_workspace() -> None:
     assert auth_service.decode_access_token(access_token.access_token)["role"] == "owner"
     assert repository.audit_actions == ["organization.created", "session.created"]
     assert repository.committed is True
+
+
+def test_workspace_update_persists_identity_and_records_an_audit_event() -> None:
+    organization = SimpleNamespace(id=uuid4(), name="Acme", slug="acme")
+    actor_id = uuid4()
+
+    class Repository:
+        audit: dict[str, object] | None = None
+        committed = False
+
+        async def get_organization(self, organization_id):
+            assert organization_id == organization.id
+            return organization
+
+        async def find_organization_by_slug(self, slug):
+            assert slug == "acme-engineering"
+            return None
+
+        async def update_organization(self, current, name, slug):
+            current.name = name
+            current.slug = slug
+            return current
+
+        async def add_audit(self, **values):
+            self.audit = values
+
+        async def commit(self):
+            self.committed = True
+
+    repository = Repository()
+    updated = asyncio.run(
+        AuthenticationService(repository, Settings(environment="test")).update_workspace(
+            organization.id, actor_id, "Acme Engineering", "acme-engineering"
+        )
+    )
+
+    assert (updated.name, updated.slug) == ("Acme Engineering", "acme-engineering")
+    assert repository.audit == {
+        "action": "workspace.updated",
+        "resource_type": "organization",
+        "organization_id": organization.id,
+        "actor_id": actor_id,
+    }
+    assert repository.committed is True
+
+
+def test_workspace_update_rejects_a_slug_owned_by_another_workspace() -> None:
+    organization = SimpleNamespace(id=uuid4(), name="Acme", slug="acme")
+
+    class Repository:
+        async def get_organization(self, _):
+            return organization
+
+        async def find_organization_by_slug(self, _):
+            return SimpleNamespace(id=uuid4())
+
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(
+            AuthenticationService(Repository(), Settings(environment="test")).update_workspace(
+                organization.id, uuid4(), "Acme", "taken"
+            )
+        )
+
+    assert error.value.status_code == 409

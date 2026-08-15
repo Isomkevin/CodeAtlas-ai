@@ -8,6 +8,8 @@ All HTTP paths are prefixed with `/api/v1`. Except for health probes, the GitHub
 - `GET /auth/github/authorize` begins GitHub OAuth with a signed, short-lived state value.
 - `GET /auth/github/callback` validates the callback, provisions tenant identity as needed, stores encrypted credentials, and posts a JWT to the trusted web-app opener.
 - `GET /auth/session/claims` validates the current bearer token.
+- `GET /auth/workspace` reads the current tenant's name, slug, plan, status, and caller role.
+- `PUT /auth/workspace` lets owners and admins update the workspace name and unique slug; each change is audited.
 
 ## Repository ingestion
 

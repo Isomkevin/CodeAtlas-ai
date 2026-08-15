@@ -9,12 +9,9 @@ failure into a slightly slow first call.
 
 import asyncio
 from collections.abc import Awaitable, Callable
-from typing import TypeVar
 
 import structlog
 from neo4j.exceptions import AuthError, ServiceUnavailable, SessionExpired
-
-T = TypeVar("T")
 
 _BACKOFF_SECONDS = (2, 5, 10)
 """Attempt 1 runs immediately; attempts 2-4 wait these many seconds first."""
@@ -24,7 +21,9 @@ logger = structlog.get_logger(__name__)
 RETRYABLE = (AuthError, ServiceUnavailable, SessionExpired)
 
 
-async def with_wake_retry(operation: Callable[[], Awaitable[T]], *, label: str) -> T:
+async def with_wake_retry[T](
+    operation: Callable[[], Awaitable[T]], *, label: str
+) -> T:
     """Retry `operation` while Aura is resuming; raise on non-wake failures."""
 
     last_error: Exception | None = None

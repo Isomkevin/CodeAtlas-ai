@@ -9,9 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings, get_settings
 from app.database import get_session
-from app.modules.authentication.bearer import bearer_scheme, resolve_bearer_claims
-from app.modules.authentication.repository import AuthenticationRepository
+from app.modules.authentication.bearer import resolve_bearer_claims
 from app.modules.authentication.models import MembershipRole
+from app.modules.authentication.repository import AuthenticationRepository
 from app.modules.authentication.schemas import (
     AccessToken,
     GitHubAuthorization,
@@ -31,7 +31,10 @@ def require_workspace_role(*permitted: MembershipRole):
         claims: dict[str, str] = Depends(resolve_bearer_claims),
     ) -> dict[str, str]:
         if MembershipRole(claims["role"]) not in permitted:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient organization role")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient organization role",
+            )
         return claims
 
     return authorize
@@ -125,7 +128,9 @@ async def get_workspace(
 @router.put("/workspace", response_model=WorkspaceResponse)
 async def update_workspace(
     request: WorkspaceUpdateRequest,
-    claims: dict[str, str] = Depends(require_workspace_role(MembershipRole.OWNER, MembershipRole.ADMIN)),
+    claims: dict[str, str] = Depends(
+        require_workspace_role(MembershipRole.OWNER, MembershipRole.ADMIN)
+    ),
     service: AuthenticationService = Depends(get_persistent_authentication_service),
 ) -> WorkspaceResponse:
     organization = await service.update_workspace(

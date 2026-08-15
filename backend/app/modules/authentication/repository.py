@@ -56,7 +56,9 @@ class AuthenticationRepository:
             )
         )
 
-    async def update_organization(self, organization: Organization, name: str, slug: str) -> Organization:
+    async def update_organization(
+        self, organization: Organization, name: str, slug: str
+    ) -> Organization:
         organization.name = name
         organization.slug = slug
         await self._session.flush()
