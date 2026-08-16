@@ -26,6 +26,7 @@ import {
   Users,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
+import { toast } from "sonner";
 
 type Section = "general" | "integrations" | "agents" | "notifications" | "billing";
 
@@ -156,8 +157,13 @@ function SettingsPage() {
       setWorkspace(updated);
       setWorkspaceName(updated.name);
       setWorkspaceSlug(updated.slug);
+      toast.success("Workspace saved", {
+        description: `${updated.name} is now available as ${updated.slug}.`,
+      });
     } catch (error) {
-      setWorkspaceError(error instanceof Error ? error.message : "Unable to save workspace details.");
+      const message = error instanceof Error ? error.message : "Unable to save workspace details.";
+      setWorkspaceError(message);
+      toast.error("Workspace not saved", { description: message });
     } finally {
       setWorkspaceSaving(false);
     }
