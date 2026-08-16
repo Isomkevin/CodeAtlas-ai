@@ -146,7 +146,13 @@ function SettingsPage() {
     setWorkspaceSaving(true);
     setWorkspaceError(null);
     try {
-      const updated = await updateWorkspace({ name: workspaceName.trim(), slug: workspaceSlug.trim() });
+      const name = workspaceName.trim();
+      const slug = workspaceSlug.trim().toLowerCase();
+      if (name.length < 2) throw new Error("Workspace name must be at least 2 characters.");
+      if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
+        throw new Error("Workspace slug can use lowercase letters, numbers, and single hyphens only.");
+      }
+      const updated = await updateWorkspace({ name, slug });
       setWorkspace(updated);
       setWorkspaceName(updated.name);
       setWorkspaceSlug(updated.slug);
@@ -205,7 +211,7 @@ function SettingsPage() {
         </aside>
 
         <div className="space-y-4">
-          {active === "general" && <GeneralPanel workspace={workspace} name={workspaceName} slug={workspaceSlug} signedIn={signedIn} canManage={canManage} saving={workspaceSaving} error={workspaceError} onNameChange={setWorkspaceName} onSlugChange={setWorkspaceSlug} onSave={() => { void saveWorkspaceDetails(); }} onConnect={() => { void connectGitHub(); }} />}
+          {active === "general" && <GeneralPanel workspace={workspace} name={workspaceName} slug={workspaceSlug} signedIn={signedIn} canManage={canManage} saving={workspaceSaving} error={workspaceError} onNameChange={setWorkspaceName} onSlugChange={(value) => setWorkspaceSlug(value.toLowerCase())} onSave={() => { void saveWorkspaceDetails(); }} onConnect={() => { void connectGitHub(); }} />}
           {active === "integrations" && <IntegrationsPanel signedIn={signedIn} error={githubError} demoAvailable={demoAvailable} demoSigningIn={demoSigningIn} onConnect={() => { void connectGitHub(); }} onDevelopmentSession={() => { void createDevelopmentSession(); }} />}
           {active === "agents" && <AgentsPanel provider={aiProvider} aiKey={aiKey} baseUrl={aiBaseUrl} model={aiModel} saving={aiSaving} error={aiError} canManage={canManage} onKeyChange={setAiKey} onBaseUrlChange={setAiBaseUrl} onModelChange={setAiModel} onSave={() => { void saveAIProvider(); }} onClear={() => { void clearAIProvider(); }} />}
           {active === "notifications" && <NotificationsPanel />}

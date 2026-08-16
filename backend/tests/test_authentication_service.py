@@ -8,6 +8,7 @@ from fastapi import HTTPException
 
 from app.config import Settings
 from app.modules.authentication.models import MembershipRole
+from app.modules.authentication.schemas import WorkspaceUpdateRequest
 from app.modules.authentication.service import AuthenticationService
 
 
@@ -161,3 +162,9 @@ def test_workspace_update_rejects_a_slug_owned_by_another_workspace() -> None:
         )
 
     assert error.value.status_code == 409
+
+
+def test_workspace_update_request_normalizes_a_legacy_mixed_case_slug() -> None:
+    request = WorkspaceUpdateRequest(name="Kevin Isom workspace", slug="Isomkevin-workspace")
+
+    assert request.slug == "isomkevin-workspace"

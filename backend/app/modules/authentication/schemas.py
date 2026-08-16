@@ -3,7 +3,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr, Field, HttpUrl
+from pydantic import BaseModel, EmailStr, Field, HttpUrl, field_validator
 
 from app.modules.authentication.models import MembershipRole
 
@@ -36,6 +36,13 @@ class CreateOrganizationRequest(BaseModel):
     name: str = Field(min_length=2, max_length=160)
     slug: str = Field(pattern="^[a-z0-9]+(?:-[a-z0-9]+)*$", min_length=2, max_length=80)
 
+    @field_validator("slug", mode="before")
+    @classmethod
+    def normalize_slug(cls, value: object) -> object:
+        """Keep organization slugs URL-safe even when GitHub login casing varies."""
+
+        return value.strip().lower() if isinstance(value, str) else value
+
 
 class WorkspaceResponse(BaseModel):
     id: UUID
@@ -51,3 +58,10 @@ class WorkspaceResponse(BaseModel):
 class WorkspaceUpdateRequest(BaseModel):
     name: str = Field(min_length=2, max_length=160)
     slug: str = Field(pattern="^[a-z0-9]+(?:-[a-z0-9]+)*$", min_length=2, max_length=80)
+
+    @field_validator("slug", mode="before")
+    @classmethod
+    def normalize_slug(cls, value: object) -> object:
+        """Accept legacy mixed-case slugs and persist their canonical lowercase form."""
+
+        return value.strip().lower() if isinstance(value, str) else value
