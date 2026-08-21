@@ -16,9 +16,9 @@ Software architecture usually goes stale the moment it's documented. CodeAtlas k
 Everything you need to evaluate CodeAtlas in ~10 minutes:
 
 | | |
-|---|---|
-| **Live app** | https://code-atlas-ai-henna.vercel.app |
-| **Demo video (≤ 3 min)** | https://www.youtube.com/watch?v=zlBKdZrCyeY |
+| --- | --- |
+| **Live app** | <https://code-atlas-ai-henna.vercel.app> |
+| **Demo video (≤ 3 min)** | <https://www.youtube.com/watch?v=zlBKdZrCyeY> |
 | **Pinned evaluation guide** | [Issue #1 — 10-minute test recipe, feature tour, MCP setup](../../issues/1) |
 | **Backend health** | [`/api/v1/warm`](https://codeatlas-api-r0e9.onrender.com/api/v1/warm) · [`/api/v1/docs`](https://codeatlas-api-r0e9.onrender.com/api/v1/docs) |
 | **Codex Session ID** | `019f80d5-58a2-70e0-ba16-54df678fecea` |
@@ -71,22 +71,26 @@ flowchart LR
 ## Feature tour
 
 ### 🗂️ Repository intelligence
+
 - GitHub OAuth connection with encrypted per-workspace access tokens.
 - Background Celery scans; live progress streamed via authenticated WebSocket.
 - Signed GitHub webhooks trigger automatic rescans on push.
 - Immutable, versioned architecture graph — every scan produces a new graph version you can diff against.
 
 ### 📊 Graph-grounded outputs
+
 - **Architecture graph explorer** with retractable panels, node inspector, focus mode (`F`), and keyboard shortcuts (`[`, `]`, `⌘\`, `Esc`).
 - **Documentation, Mermaid, Draw.io, C4 artifacts** — generated from a specific graph version, so nothing drifts.
 - **AI architecture chat** — grounded in graph context, not raw source.
 
 ### 🤖 AI-driven implementation
+
 - **Approval-gated implementation plans** — draft → owner/admin approval → real GitHub PR opened via workspace OAuth token.
 - **"Copy MCP bridge prompt"** action — hand a coding-agent-ready prompt to Cursor/Claude Code from any approved plan.
 - **Workspace BYOK** — provide an OpenAI-compatible key/base URL/model per workspace, encrypted at rest, plaintext never returned by the API.
 
 ### 🔌 MCP coding bridge
+
 - **Remote HTTP MCP** at `POST /api/v1/mcp` — no local install, no repo clone. Just a URL + a `cak_...` Personal Access Token.
 - **Local stdio bridge** as a fallback for offline development.
 - **Long-lived revocable Personal Access Tokens** minted at Settings → Agents.
@@ -94,6 +98,7 @@ flowchart LR
 - **Setup walkthrough:** [`docs/07-mcp/client-setup.md`](docs/07-mcp/client-setup.md).
 
 ### ⚙️ Operational essentials
+
 - One-click Render Blueprint deployment ([`render.yaml`](render.yaml)).
 - `/api/v1/warm` keep-alive endpoint for external uptime monitors.
 - Neo4j Aura wake-retry (2s / 5s / 10s backoff) to survive free-tier hibernation.
@@ -121,7 +126,7 @@ At runtime, the AI layer uses the **OpenAI Responses API** with the versioned Ar
 ## Tech stack
 
 | Layer | Stack |
-|---|---|
+| --- | --- |
 | **Frontend** | React 19, TypeScript, Vite, TanStack Start + Router, Tailwind, Radix UI, ReactFlow, framer-motion |
 | **API** | FastAPI, Python 3.13, SQLAlchemy 2, Pydantic v2, Alembic, structlog |
 | **Auth** | JWT sessions, GitHub OAuth, PAT (`cak_...`) for MCP, per-workspace RBAC |
@@ -139,7 +144,7 @@ At runtime, the AI layer uses the **OpenAI Responses API** with the versioned Ar
 
 ### Try the hosted app (0 minutes)
 
-Sign in at **https://code-atlas-ai-henna.vercel.app**. Connect any GitHub repo you can read. That's it.
+Sign in at **<https://code-atlas-ai-henna.vercel.app>**. Connect any GitHub repo you can read. That's it.
 
 ### Run locally (5 minutes)
 
@@ -182,7 +187,7 @@ Set up an external uptime monitor (e.g. UptimeRobot) hitting `/api/v1/warm` ever
 ## Documentation index
 
 | Doc | Purpose |
-|---|---|
+| --- | --- |
 | [`docs/00-overview/hackathon-submission.md`](docs/00-overview/hackathon-submission.md) | Full submission narrative — problem, approach, challenges, learnings |
 | [`docs/00-overview/vision.md`](docs/00-overview/vision.md) | Product vision |
 | [`docs/00-overview/roadmap.md`](docs/00-overview/roadmap.md) | Post-hackathon roadmap |
